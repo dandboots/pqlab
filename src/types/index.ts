@@ -154,12 +154,17 @@ export interface ListaItem {
   grupoId?: string
   dueDate?: string      // YYYY-MM-DD
   attachment?: Anexo
+  x?: number
+  y?: number
+  tags?: string[]
 }
 
 export interface Lista {
   id: string
   title: string
   description?: string
+  kind?: 'lista' | 'canva'
+  canvaTags?: string[]
   grupos: ListaGrupo[]
   items: ListaItem[]
   created_at: string
@@ -215,6 +220,9 @@ export interface ListaSimpleItem {
   description?: string  // markdown
   order: number
   grupoId?: string
+  x?: number
+  y?: number
+  tags?: string[]
 }
 
 export interface ListaSimples {
@@ -222,6 +230,8 @@ export interface ListaSimples {
   title: string
   description?: string
   starred?: boolean
+  kind?: 'lista' | 'canva'
+  canvaTags?: string[]
   grupos: ListaGrupo[]
   items: ListaSimpleItem[]
   created_at: string
