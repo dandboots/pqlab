@@ -16,7 +16,7 @@ const navItems = [
   { to: '/fichamentos', label: 'Fichamentos',          icon: FileText,       color: 'text-green-600',  bg: 'bg-green-50',  activeBg: 'bg-green-100' },
   { to: '/revisoes',    label: 'Revisões',             icon: ClipboardCheck, color: 'text-teal-600',   bg: 'bg-teal-50',   activeBg: 'bg-teal-100' },
   { to: '/planos',      label: 'Planos',               icon: CalendarDays,   color: 'text-purple-600', bg: 'bg-purple-50', activeBg: 'bg-purple-100' },
-  { to: '/submissoes',  label: 'Submissões',           icon: Kanban,         color: 'text-purple-600', bg: 'bg-purple-50', activeBg: 'bg-purple-100' },
+  { to: '/submissoes',  label: 'Submissões',           icon: Kanban,         color: 'text-violet-600', bg: 'bg-violet-50', activeBg: 'bg-violet-100' },
 ]
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
