@@ -188,6 +188,7 @@ export interface Arguicao {
   tipoOutro?: string
   modalidade?: ModalidadeBanca
   data: string              // YYYY-MM-DD
+  secoes?: { id: string; label: string; content: string }[]
   comentariosGerais: string
   questoesTeoricas: string
   questoesMetodologicas: string

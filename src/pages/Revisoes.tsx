@@ -405,6 +405,34 @@ function renderMarkdownToPDF(
   return y
 }
 
+// ─── Section helpers ───────────────────────────────────────────────────────
+
+function getArguicaoSecoes(a: {
+  secoes?: { id: string; label: string; content: string }[]
+  comentariosGerais: string; questoesTeoricas: string
+  questoesMetodologicas: string; comentariosEspecificos: string
+  conclusoes: string; anotacaoOutrosMembros: string
+}): { id: string; label: string; content: string }[] {
+  const main = a.secoes ?? [
+    { id: 'cg', label: 'Comentários Gerais',        content: a.comentariosGerais        || '' },
+    { id: 'qt', label: 'Questões Teóricas',          content: a.questoesTeoricas          || '' },
+    { id: 'qm', label: 'Questões Metodológicas',     content: a.questoesMetodologicas     || '' },
+    { id: 'ce', label: 'Comentários Específicos',    content: a.comentariosEspecificos    || '' },
+    { id: 'co', label: 'Conclusões',                 content: a.conclusoes                || '' },
+  ]
+  const result = [...main]
+  if (a.anotacaoOutrosMembros?.trim())
+    result.push({ id: 'anot', label: 'Anotações de Outros Membros da Banca', content: a.anotacaoOutrosMembros })
+  return result
+}
+
+function makeDefaultSecoes(): { id: string; label: string; content: string }[] {
+  return [
+    'Comentários Gerais', 'Questões Teóricas', 'Questões Metodológicas',
+    'Comentários Específicos', 'Conclusões',
+  ].map(label => ({ id: crypto.randomUUID(), label, content: '' }))
+}
+
 function exportArguicaoMarkdown(a: Arguicao) {
   const tipo = a.tipoBanca === 'outro' ? (a.tipoOutro || 'Outro') : TIPO_LABELS[a.tipoBanca]
   const modalidade = a.modalidade ? ` — ${a.modalidade === 'qualificacao' ? 'Qualificação' : 'Defesa'}` : ''
@@ -419,17 +447,10 @@ function exportArguicaoMarkdown(a: Arguicao) {
     `**Data:** ${formatDate(a.data)}`,
     '',
   ]
-  const sections: [string, string][] = [
-    ['Comentários Gerais', a.comentariosGerais],
-    ['Questões Teóricas', a.questoesTeoricas],
-    ['Questões Metodológicas', a.questoesMetodologicas],
-    ['Comentários Específicos', a.comentariosEspecificos],
-    ['Conclusões', a.conclusoes],
-    ['Anotações de Outros Membros da Banca', a.anotacaoOutrosMembros],
-  ]
-  for (const [title, content] of sections) {
+  const sections = getArguicaoSecoes(a)
+  for (const { label, content } of sections) {
     if (content.trim()) {
-      lines.push(`## ${title}`, '', stripPageTags(content), '')
+      lines.push(`## ${label}`, '', stripPageTags(content), '')
     }
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
@@ -511,15 +532,8 @@ function exportArguicaoPDF(a: Arguicao) {
   y += 4
 
   // Text sections
-  const sections: [string, string][] = [
-    ['Comentários Gerais', a.comentariosGerais],
-    ['Questões Teóricas', a.questoesTeoricas],
-    ['Questões Metodológicas', a.questoesMetodologicas],
-    ['Comentários Específicos', a.comentariosEspecificos],
-    ['Conclusões', a.conclusoes],
-    ['Anotações de Outros Membros da Banca', a.anotacaoOutrosMembros],
-  ]
-  for (const [title, content] of sections) {
+  const sections = getArguicaoSecoes(a)
+  for (const { label: title, content } of sections) {
     if (!content.trim()) continue
     ensureSpace(12)
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(13, 148, 136)
@@ -618,14 +632,7 @@ async function exportArguicaoDocx(a: Arguicao) {
     ['Data', formatDate(a.data)],
   ]
 
-  const sections: [string, string][] = [
-    ['Comentários Gerais', a.comentariosGerais],
-    ['Questões Teóricas', a.questoesTeoricas],
-    ['Questões Metodológicas', a.questoesMetodologicas],
-    ['Comentários Específicos', a.comentariosEspecificos],
-    ['Conclusões', a.conclusoes],
-    ['Anotações de Outros Membros da Banca', a.anotacaoOutrosMembros],
-  ]
+  const sections = getArguicaoSecoes(a)
 
   const metaTable = new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -651,7 +658,7 @@ async function exportArguicaoDocx(a: Arguicao) {
     new Paragraph({ text: '' }),
     metaTable,
     new Paragraph({ text: '' }),
-    ...sections.flatMap(([title, content]) => {
+    ...sections.flatMap(({ label: title, content }) => {
       if (!content.trim()) return []
       return [
         new Paragraph({ text: title, heading: HeadingLevel.HEADING_2 }),
@@ -746,6 +753,17 @@ function ArguicaoForm({
   const [form, setForm] = useState<Omit<Arguicao, 'id' | 'created_at' | 'updated_at'>>(
     initial ? { ...initial } : { ...EMPTY_ARGUICAO }
   )
+  const [secoes, setSecoes] = useState<{ id: string; label: string; content: string }[]>(
+    () => initial?.secoes ?? (initial ? [
+      { id: crypto.randomUUID(), label: 'Comentários Gerais',     content: initial.comentariosGerais     || '' },
+      { id: crypto.randomUUID(), label: 'Questões Teóricas',       content: initial.questoesTeoricas       || '' },
+      { id: crypto.randomUUID(), label: 'Questões Metodológicas',  content: initial.questoesMetodologicas  || '' },
+      { id: crypto.randomUUID(), label: 'Comentários Específicos', content: initial.comentariosEspecificos || '' },
+      { id: crypto.randomUUID(), label: 'Conclusões',              content: initial.conclusoes             || '' },
+    ] : makeDefaultSecoes())
+  )
+  const [editingLabelIdx, setEditingLabelIdx] = useState<number | null>(null)
+  const [labelDraft, setLabelDraft] = useState('')
   const [newMembro, setNewMembro] = useState('')
   const [customInst, setCustomInst] = useState(
     initial && !INSTITUICOES_BRASIL.includes(initial.instituicao) && initial.instituicao !== 'Outra'
@@ -777,6 +795,7 @@ function ArguicaoForm({
     const now = new Date().toISOString()
     onSave({
       ...form,
+      secoes,
       id: initial?.id ?? crypto.randomUUID(),
       created_at: initial?.created_at ?? now,
       updated_at: now,
@@ -878,26 +897,73 @@ function ArguicaoForm({
       </div>
 
       <div className="border-t pt-4 space-y-3">
-        {([
-          ['comentariosGerais', 'Comentários Gerais'],
-          ['questoesTeoricas', 'Questões Teóricas'],
-          ['questoesMetodologicas', 'Questões Metodológicas'],
-          ['comentariosEspecificos', 'Comentários Específicos'],
-          ['conclusoes', 'Conclusões'],
-          ['anotacaoOutrosMembros', 'Anotações de Outros Membros da Banca'],
-        ] as const).map(([field, label]) => (
-          <div key={field}>
-            <Label className="text-xs">{label}</Label>
-            <div className="mt-1">
-              <MarkdownEditor
-                value={form[field]}
-                onChange={(v) => set(field, v)}
-                placeholder={`${label}... (use p. X ou pp. X-Y para citar páginas)`}
-                minHeight={80}
-              />
+        {secoes.map((secao, idx) => (
+          <div key={secao.id}>
+            <div className="flex items-center gap-1 mb-1">
+              {editingLabelIdx === idx ? (
+                <input
+                  autoFocus
+                  className="text-xs font-medium flex-1 border border-teal-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-teal-400"
+                  value={labelDraft}
+                  onChange={e => setLabelDraft(e.target.value)}
+                  onBlur={() => {
+                    setSecoes(prev => prev.map((s, i) => i === idx ? { ...s, label: labelDraft.trim() || s.label } : s))
+                    setEditingLabelIdx(null)
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { setSecoes(prev => prev.map((s, i) => i === idx ? { ...s, label: labelDraft.trim() || s.label } : s)); setEditingLabelIdx(null) }
+                    if (e.key === 'Escape') setEditingLabelIdx(null)
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-gray-700 flex items-center gap-1 group hover:text-teal-700"
+                  onClick={() => { setLabelDraft(secao.label); setEditingLabelIdx(idx) }}
+                  title="Clique para renomear"
+                >
+                  {secao.label}
+                  <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSecoes(prev => prev.filter((_, i) => i !== idx))}
+                className="ml-auto text-gray-300 hover:text-red-400 transition-colors"
+                title="Remover seção"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
+            <MarkdownEditor
+              value={secao.content}
+              onChange={v => setSecoes(prev => prev.map((s, i) => i === idx ? { ...s, content: v } : s))}
+              placeholder={`${secao.label}... (use p. X ou pp. X-Y para citar páginas)`}
+              minHeight={80}
+            />
           </div>
         ))}
+        <button
+          type="button"
+          onClick={() => setSecoes(prev => [...prev, { id: crypto.randomUUID(), label: 'Nova seção', content: '' }])}
+          className="flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-700 font-medium"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Adicionar seção
+        </button>
+        <div className="border-t pt-3">
+          <Label className="text-xs text-gray-500">
+            Anotações de Outros Membros da Banca <span className="font-normal">(campo fixo, opcional)</span>
+          </Label>
+          <div className="mt-1">
+            <MarkdownEditor
+              value={form.anotacaoOutrosMembros}
+              onChange={(v) => set('anotacaoOutrosMembros', v)}
+              placeholder="Anotações de Outros Membros da Banca... (use p. X ou pp. X-Y para citar páginas)"
+              minHeight={80}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
@@ -1040,18 +1106,11 @@ function ArguicaoCard({
                     {refFormat === 'abnt' ? formatABNTArguicao(a).replace(/\*\*/g, '') : formatAPAArguicao(a).replace(/\*/g, '')}
                   </div>
                 )}
-                {([
-                  ['Comentários Gerais', a.comentariosGerais],
-                  ['Questões Teóricas', a.questoesTeoricas],
-                  ['Questões Metodológicas', a.questoesMetodologicas],
-                  ['Comentários Específicos', a.comentariosEspecificos],
-                  ['Conclusões', a.conclusoes],
-                  ['Anotações de Outros Membros da Banca', a.anotacaoOutrosMembros],
-                ] as const).filter(([, v]) => v?.trim()).map(([title, content]) => (
-                  <div key={title}>
-                    <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">{title}</p>
+                {getArguicaoSecoes(a).filter(s => s.content?.trim()).map(s => (
+                  <div key={s.id}>
+                    <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">{s.label}</p>
                     <div className="text-sm text-gray-700 leading-relaxed">
-                      <PageTaggedMarkdown content={content} />
+                      <PageTaggedMarkdown content={s.content} />
                     </div>
                   </div>
                 ))}

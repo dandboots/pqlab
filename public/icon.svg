@@ -2,7 +2,7 @@
   <!-- green-500 rounded square background (same as sidebar logo) -->
   <rect width="32" height="32" rx="7" fill="#22c55e"/>
   <!-- GraduationCap from lucide-react, 24×24 → scaled to 16×16, centered at (8,8) -->
-  <g transform="translate(3,4) scale(0.9)" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+  <g transform="translate(1,3) scale(1.1)" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none">
     <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
     <path d="M6 12v5c3 3 9 3 12 0v-5"/>
   </g>
