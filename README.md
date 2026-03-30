@@ -1,6 +1,6 @@
 # :pencil2: pqLAB
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19305324.svg)](https://doi.org/10.5281/zenodo.19305324)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19324964.svg)](https://doi.org/10.5281/zenodo.19324964)
 
 O pqLAB é uma ferramenta web de organização de pesquisa qualitativa que centraliza em uma única interface seis instrumentos de trabalho acadêmico: diário de campo, listas, tarefas, favoritos, fichamentos e planos de curso, todos conectados por [[links internos]] navegáveis. Os dados são armazenados diretamente no repositório GitHub privado do próprio usuário, sem servidor intermediário, e uma visualização em grafo revela automaticamente as conexões temáticas entre o material registrado, formando um mapa mental, capaz de fornecer *insights* sobre sua própria investigação.
 
