@@ -339,9 +339,13 @@ export async function loadRevisoes(): Promise<Revisao[]> {
     throw failed[0].reason
   }
   return results
-    .filter((r): r is PromiseFulfilledResult<Revisao> => r.status === 'fulfilled' && r.value != null)
+    .filter((r): r is PromiseFulfilledResult<Revisao> =>
+      r.status === 'fulfilled' &&
+      r.value != null &&
+      typeof (r.value as unknown as Record<string, unknown>).created_at === 'string'
+    )
     .map((r) => r.value)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
 }
 
 export async function saveRevisao(r: Revisao): Promise<void> {
