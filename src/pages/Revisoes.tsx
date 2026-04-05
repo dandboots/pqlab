@@ -1037,6 +1037,10 @@ function ParecerForm({
             minHeight={200}
           />
         </div>
+        <div className="flex gap-4 mt-1.5 text-xs text-gray-400 select-none">
+          <span>{form.parecer.length} {form.parecer.length === 1 ? 'caractere' : 'caracteres'}</span>
+          <span>{form.parecer.trim() === '' ? 0 : form.parecer.trim().split(/\s+/).length} {form.parecer.trim().split(/\s+/).filter(Boolean).length === 1 ? 'palavra' : 'palavras'}</span>
+        </div>
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onClose}>Cancelar</Button>
