@@ -316,8 +316,11 @@ export async function deleteListaSimples(id: string): Promise<void> {
 
 export async function loadRevisoes(): Promise<Revisao[]> {
   const files = await listYamls('data/revisoes')
-  const docs = await Promise.all(files.map((f) => readYaml<Revisao>(f)))
-  return docs.sort((a, b) => b.created_at.localeCompare(a.created_at))
+  const results = await Promise.allSettled(files.map((f) => readYaml<Revisao>(f)))
+  return results
+    .filter((r): r is PromiseFulfilledResult<Revisao> => r.status === 'fulfilled' && r.value != null)
+    .map((r) => r.value)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
 export async function saveRevisao(r: Revisao): Promise<void> {
