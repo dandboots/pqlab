@@ -80,8 +80,22 @@ async function writeYaml<T extends object>(filePath: string, data: T, msg: strin
       // File doesn't exist yet — create mode (sha stays undefined)
     }
   }
-  const result = await writeTextFile(cfg(), filePath, text, msg, sha)
-  shaCache.set(filePath, result.content.sha)
+  try {
+    const result = await writeTextFile(cfg(), filePath, text, msg, sha)
+    shaCache.set(filePath, result.content.sha)
+  } catch (err: unknown) {
+    // GitHub 422: SHA conflict (file was modified externally or cache is stale).
+    // Fetch the real current SHA and retry once.
+    const msg422 = err instanceof Error ? err.message : String(err)
+    if (msg422.includes('but expected') || msg422.includes('SHA') || msg422.includes('422')) {
+      const fresh = await readFile(cfg(), filePath)
+      shaCache.set(filePath, fresh.sha)
+      const result = await writeTextFile(cfg(), filePath, text, msg, fresh.sha)
+      shaCache.set(filePath, result.content.sha)
+    } else {
+      throw err
+    }
+  }
 }
 
 async function deleteYaml(filePath: string, msg: string): Promise<void> {

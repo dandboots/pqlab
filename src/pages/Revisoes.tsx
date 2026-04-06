@@ -1337,7 +1337,10 @@ function ImportDialog({
     setImporting(true)
     try {
       if (!isDemoMode) {
-        await Promise.all(valid.map((i) => saveRevisao(i.revisao!)))
+        // Sequential saves — GitHub Contents API doesn't handle concurrent commits well
+        for (const item of valid) {
+          await saveRevisao(item.revisao!)
+        }
       }
       onImported(valid.map((i) => i.revisao!))
       toast({ title: `${valid.length} revisão(ões) importada(s)` })
