@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -333,6 +333,201 @@ export function MarkdownRenderer({ content, className }: { content: string; clas
   return (
     <div className={cn('prose prose-sm max-w-none text-gray-800 leading-relaxed', className)}>
       <WikiMarkdown content={content} />
+    </div>
+  )
+}
+
+// ─── Inline markdown field ────────────────────────────────────────────────────
+
+// Heading component factory — shows # marker on hover
+function makeInlineHeading(level: 1 | 2 | 3) {
+  const Tag = `h${level}` as 'h1' | 'h2' | 'h3'
+  const marker = '#'.repeat(level)
+  return function InlineHeading({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
+    return (
+      <Tag {...props} className="relative group">
+        <span
+          className="absolute right-full pr-1.5 opacity-0 group-hover:opacity-40 text-gray-400 font-normal select-none transition-opacity duration-100 pointer-events-none whitespace-nowrap"
+          style={{ top: '0.1em', fontSize: '0.7em' }}
+        >
+          {marker}
+        </span>
+        {children}
+      </Tag>
+    )
+  }
+}
+
+const inlineHeadingComponents = {
+  h1: makeInlineHeading(1),
+  h2: makeInlineHeading(2),
+  h3: makeInlineHeading(3),
+}
+
+// WikiMarkdown variant with heading # hover support
+function InlineWikiMarkdown({ content }: { content: string }) {
+  const { navigate } = useWikiLinks()
+  const processed = processWikiLinks(content)
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        ...inlineHeadingComponents,
+        a: ({ href, children, ...props }) => {
+          if (href?.startsWith('wikilink:')) {
+            const title = decodeURIComponent(href.slice('wikilink:'.length))
+            return (
+              <span
+                onClick={() => navigate(title)}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-50 border border-orange-200 text-orange-700 text-xs cursor-pointer hover:bg-orange-100 font-medium no-underline"
+                title={`Link interno: ${title}`}
+              >
+                <Hash className="w-3 h-3 inline-block flex-shrink-0" />
+                {title}
+              </span>
+            )
+          }
+          return <a href={href} {...props}>{children}</a>
+        },
+      }}
+    >
+      {processed}
+    </ReactMarkdown>
+  )
+}
+
+// Read-only renderer with heading hover (used by InlineMarkdownField in view mode)
+export function InlineMarkdownRenderer({ content, className }: { content: string; className?: string }) {
+  if (!content) return null
+  return (
+    <div className={cn('prose prose-sm max-w-none pl-5 dark:prose-invert text-gray-800 leading-relaxed', className)}>
+      <InlineWikiMarkdown content={content} />
+    </div>
+  )
+}
+
+// Shared toolbar used by InlineMarkdownField
+// onMouseDown + preventDefault keeps the textarea focused while clicking buttons
+function InlineMdToolbar({
+  value,
+  onChange,
+  textareaRef,
+}: {
+  value: string
+  onChange: (v: string) => void
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
+}) {
+  const handleAction = useCallback(
+    (action: ToolbarAction['action']) => {
+      const ta = textareaRef.current
+      if (!ta) return
+      action(ta, value, onChange)
+    },
+    [value, onChange, textareaRef]
+  )
+  return (
+    <div className="flex items-center gap-0.5 flex-wrap px-1.5 py-1 border-b border-gray-200 bg-gray-50">
+      {toolbarActions.map((item, i) =>
+        item === 'sep' ? (
+          <div key={i} className="w-px h-4 bg-gray-200 mx-0.5" />
+        ) : (
+          <button
+            key={item.title}
+            type="button"
+            title={item.title}
+            onMouseDown={(e) => {
+              e.preventDefault() // keep textarea focused
+              handleAction(item.action)
+            }}
+            className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors"
+          >
+            <item.icon className="w-3 h-3" />
+          </button>
+        )
+      )}
+    </div>
+  )
+}
+
+// Click-to-edit inline markdown field with WYSIWYG toolbar
+// View mode: renders Markdown with heading # hover markers
+// Edit mode: auto-growing textarea + toolbar; blur → back to view mode
+export interface InlineMarkdownFieldProps {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  className?: string
+  readOnly?: boolean
+}
+
+export function InlineMarkdownField({
+  value,
+  onChange,
+  placeholder = 'Clique para escrever…',
+  className,
+  readOnly = false,
+}: InlineMarkdownFieldProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Sync draft when value changes externally (e.g. parent reloads data)
+  useEffect(() => {
+    if (!isEditing) setDraft(value)
+  }, [value, isEditing])
+
+  // Auto-resize textarea
+  useLayoutEffect(() => {
+    if (isEditing && textareaRef.current) {
+      const ta = textareaRef.current
+      ta.style.height = 'auto'
+      ta.style.height = ta.scrollHeight + 'px'
+    }
+  }, [isEditing, draft])
+
+  function enterEdit() {
+    if (readOnly) return
+    setDraft(value)
+    setIsEditing(true)
+  }
+
+  function handleBlur() {
+    setIsEditing(false)
+    if (draft !== value) onChange(draft)
+  }
+
+  if (!isEditing) {
+    return (
+      <div
+        onClick={enterEdit}
+        className={cn(
+          'rounded-md transition-colors min-h-[2rem]',
+          readOnly ? 'cursor-default' : 'cursor-text hover:bg-gray-50/80',
+          className
+        )}
+      >
+        {value.trim() ? (
+          <InlineMarkdownRenderer content={value} />
+        ) : !readOnly ? (
+          <p className="text-gray-400 text-sm italic px-2 py-1.5">{placeholder}</p>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('rounded-md border border-teal-300 bg-white overflow-hidden shadow-sm', className)}>
+      <InlineMdToolbar value={draft} onChange={setDraft} textareaRef={textareaRef} />
+      <textarea
+        ref={textareaRef}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={handleBlur}
+        autoFocus
+        placeholder={placeholder}
+        className="w-full resize-none p-3 text-sm font-mono text-gray-900 focus:outline-none leading-relaxed bg-white min-h-[5rem]"
+        style={{ overflow: 'hidden' }}
+      />
     </div>
   )
 }

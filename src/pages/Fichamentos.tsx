@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import { FileText, Table2, Plus, Search, Edit2, Trash2, Download, ExternalLink, BookOpen, LayoutGrid, List as ListIcon, X, ChevronDown, ChevronUp, Paperclip } from 'lucide-react'
@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToastContainer } from '@/components/ui/toast'
-import { MarkdownEditor, MarkdownRenderer } from '@/components/shared/MarkdownEditor'
+import { InlineMarkdownField } from '@/components/shared/MarkdownEditor'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWikiLinks, extractWikiLinks } from '@/contexts/WikiLinkContext'
 import { useToast } from '@/hooks/useToast'
@@ -269,11 +269,7 @@ function FichamentoForm({ open, onClose, onSave, initial, isDemoMode }: Fichamen
   const [journal, setJournal] = useState(initial?.journal ?? '')
   const [doi, setDoi] = useState(initial?.doi ?? '')
   const [url, setUrl] = useState(initial?.url ?? '')
-  const [summary, setSummary] = useState(initial?.summary ?? '')
-  const [subEntries, setSubEntries] = useState<FichamentoSubEntry[]>(initial?.subEntries ?? [])
   const [attachment, setAttachment] = useState<Anexo | undefined>(initial?.attachment)
-  const [newPages, setNewPages] = useState('')
-  const [newContent, setNewContent] = useState('')
   const [fetching, setFetching] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -289,11 +285,8 @@ function FichamentoForm({ open, onClose, onSave, initial, isDemoMode }: Fichamen
       setJournal(initial?.journal ?? '')
       setDoi(initial?.doi ?? '')
       setUrl(initial?.url ?? '')
-      setSummary(initial?.summary ?? '')
-      setSubEntries(initial?.subEntries ?? [])
       setAttachment(initial?.attachment)
       setManualMeta(!!initial)
-      setNewPages(''); setNewContent('')
     }
   }, [open, initial]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -337,12 +330,6 @@ function FichamentoForm({ open, onClose, onSave, initial, isDemoMode }: Fichamen
     } finally { setUploading(false); e.target.value = '' }
   }
 
-  function addSubEntry() {
-    if (!newPages.trim() || !newContent.trim()) return
-    setSubEntries((prev) => [...prev, { id: crypto.randomUUID(), pages: newPages.trim(), content: newContent.trim() }])
-    setNewPages(''); setNewContent('')
-  }
-
   function handleSubmit() {
     if (!title.trim()) return
     const now = new Date().toISOString()
@@ -355,8 +342,8 @@ function FichamentoForm({ open, onClose, onSave, initial, isDemoMode }: Fichamen
       doi: doi || undefined,
       url: url || undefined,
       attachment,
-      summary,
-      subEntries,
+      summary: initial?.summary ?? '',
+      subEntries: initial?.subEntries ?? [],
       created_at: initial?.created_at ?? now,
       updated_at: now,
     })
@@ -437,62 +424,7 @@ function FichamentoForm({ open, onClose, onSave, initial, isDemoMode }: Fichamen
             )}
           </div>
 
-          {/* Summary */}
-          <div className="space-y-1.5">
-            <Label>Resumo / Notas gerais</Label>
-            <MarkdownEditor value={summary} onChange={setSummary} placeholder="Descreva as ideias principais do texto..." minHeight={180} />
-          </div>
-
-          {/* Sub-entries */}
-          <div className="space-y-3">
-            <Label>Anotações</Label>
-            {subEntries.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left px-3 py-2 font-medium text-gray-600 w-24">Página(s)</th>
-                      <th className="text-left px-3 py-2 font-medium text-gray-600">Ideia / Citação</th>
-                      <th className="w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {subEntries.map((s, i) => (
-                      <tr key={s.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 text-gray-500 font-mono text-xs">{s.pages}</td>
-                        <td className="px-3 py-2 text-gray-800">{s.content}</td>
-                        <td className="px-2 py-2">
-                          <button type="button" onClick={() => setSubEntries((prev) => prev.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <div className="flex gap-2 items-start">
-              <div className="space-y-1 w-24">
-                <Label htmlFor="se-pages" className="text-xs">Página(s)</Label>
-                <Input id="se-pages" value={newPages} onChange={(e) => setNewPages(e.target.value)} placeholder="p. 12" className="h-8 text-xs" />
-              </div>
-              <div className="space-y-1 flex-1">
-                <Label htmlFor="se-content" className="text-xs">Ideia / Citação</Label>
-                <textarea id="se-content" value={newContent} onChange={(e) => setNewContent(e.target.value)}
-                  placeholder="Trecho ou ideia relevante..." rows={3}
-                  className="flex w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500"
-                  onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); addSubEntry() } }} />
-                <p className="text-xs text-gray-400">Ctrl+Enter para adicionar</p>
-              </div>
-              <div className="space-y-1">
-                <div className="h-[18px]" />
-                <Button type="button" size="sm" onClick={addSubEntry} disabled={!newPages.trim() || !newContent.trim()} className="h-8">
-                  <Plus className="w-3.5 h-3.5" /> Adicionar
-                </Button>
-              </div>
-            </div>
-          </div>
+          <p className="text-xs text-gray-400 italic">Após salvar, o resumo e as anotações podem ser editados diretamente no card.</p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
@@ -533,10 +465,62 @@ function ReferenceBlock({ fichamento, format }: { fichamento: Fichamento; format
 
 // ─── Fichamento card ────────────────────────────────────────────────────────
 
-function FichamentoCard({ f, refFormat, onEdit, onDelete }: {
-  f: Fichamento; refFormat: 'abnt' | 'apa' | 'tabela'; onEdit: () => void; onDelete: () => void
+function FichamentoCard({ f, refFormat, onEdit, onDelete, onUpdate, isDemoMode, defaultExpanded = false }: {
+  f: Fichamento
+  refFormat: 'abnt' | 'apa' | 'tabela'
+  onEdit: () => void
+  onDelete: () => void
+  onUpdate: (updated: Fichamento) => void
+  isDemoMode: boolean
+  defaultExpanded?: boolean
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [data, setData] = useState(f)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [newPages, setNewPages] = useState('')
+  const [newContent, setNewContent] = useState('')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  // Sync external changes (e.g. metadata edits)
+  useEffect(() => { setData(f) }, [f])
+
+  const triggerSave = useCallback((updated: Fichamento) => {
+    setSaveStatus('unsaved')
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      try {
+        if (!isDemoMode) await saveFichamento(updated)
+        onUpdate(updated)
+        setSaveStatus('saved')
+      } catch {
+        setSaveStatus('unsaved')
+      }
+    }, 1500)
+  }, [isDemoMode, onUpdate])
+
+  function updateContent(updated: Fichamento) {
+    setData(updated)
+    triggerSave(updated)
+  }
+
+  function addSubEntry() {
+    if (!newPages.trim() || !newContent.trim()) return
+    const entry = { id: crypto.randomUUID(), pages: newPages.trim(), content: newContent.trim() }
+    const updated = { ...data, subEntries: [...data.subEntries, entry] }
+    setNewPages(''); setNewContent('')
+    updateContent(updated)
+  }
+
+  function removeSubEntry(idx: number) {
+    updateContent({ ...data, subEntries: data.subEntries.filter((_, i) => i !== idx) })
+  }
+
+  function updateSubEntry(idx: number, patch: Partial<FichamentoSubEntry>) {
+    const entries = data.subEntries.map((s, i) => i === idx ? { ...s, ...patch } : s)
+    updateContent({ ...data, subEntries: entries })
+  }
+
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="pt-4 pb-4">
@@ -545,59 +529,122 @@ function FichamentoCard({ f, refFormat, onEdit, onDelete }: {
             <BookOpen className="w-4 h-4 text-green-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-900 leading-snug">{f.title}</p>
+            <p className="font-semibold text-gray-900 leading-snug">{data.title}</p>
             <p className="text-sm text-gray-500 mt-0.5">
-              {f.authors.join(', ')}{f.year ? ` (${f.year})` : ''}{f.journal ? ` · ${f.journal}` : ''}
+              {data.authors.join(', ')}{data.year ? ` (${data.year})` : ''}{data.journal ? ` · ${data.journal}` : ''}
             </p>
             <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <span className="text-xs text-gray-400">{formatDate(f.created_at.split('T')[0])}</span>
-              {f.doi && (
-                <a href={`https://doi.org/${f.doi}`} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
+              <span className="text-xs text-gray-400">{formatDate(data.created_at.split('T')[0])}</span>
+              {data.doi && (
+                <a href={`https://doi.org/${data.doi}`} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-0.5">
                   <ExternalLink className="w-3 h-3" /> DOI
                 </a>
               )}
-              {f.subEntries.length > 0 && (
-                <Badge variant="secondary" className="text-xs">{f.subEntries.length} anotaç{f.subEntries.length > 1 ? 'ões' : 'ão'}</Badge>
+              {data.subEntries.length > 0 && (
+                <Badge variant="secondary" className="text-xs">{data.subEntries.length} anotaç{data.subEntries.length > 1 ? 'ões' : 'ão'}</Badge>
               )}
             </div>
 
             {expanded && (
-              <div className="mt-4 space-y-4">
-                <ReferenceBlock fichamento={f} format={refFormat} />
-                {f.summary && <MarkdownRenderer content={f.summary} />}
-                {f.subEntries.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 mb-2">ANOTAÇÕES</p>
-                    <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-3 py-2 font-medium text-gray-600 w-24">Página(s)</th>
-                          <th className="text-left px-3 py-2 font-medium text-gray-600">Ideia / Citação</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {f.subEntries.map((s) => (
-                          <tr key={s.id}>
-                            <td className="px-3 py-2 text-gray-500 font-mono text-xs">{s.pages}</td>
-                            <td className="px-3 py-2 text-gray-800 text-sm">{s.content}</td>
+              <div className="mt-4 space-y-5">
+                {/* Auto-save indicator */}
+                <div className="flex justify-end">
+                  <span className={`text-xs select-none transition-opacity ${saveStatus === 'saved' ? 'text-gray-300' : saveStatus === 'saving' ? 'text-gray-400' : 'text-amber-500'}`}>
+                    {saveStatus === 'saving' ? 'Salvando…' : saveStatus === 'unsaved' ? '● Não salvo' : '✓ Salvo'}
+                  </span>
+                </div>
+
+                <ReferenceBlock fichamento={data} format={refFormat} />
+
+                {/* Resumo — inline editable */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Resumo / Notas gerais</p>
+                  <InlineMarkdownField
+                    value={data.summary}
+                    onChange={(v) => updateContent({ ...data, summary: v })}
+                    placeholder="Clique para escrever o resumo e anotações…"
+                  />
+                </div>
+
+                {/* Anotações — inline editable */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Anotações</p>
+                  {data.subEntries.length > 0 && (
+                    <div className="overflow-x-auto mb-3">
+                      <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-3 py-2 font-medium text-gray-600 w-24">Página(s)</th>
+                            <th className="text-left px-3 py-2 font-medium text-gray-600">Ideia / Citação</th>
+                            <th className="w-8" />
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {data.subEntries.map((s, i) => (
+                            <tr key={s.id} className="align-top">
+                              <td className="px-3 py-2">
+                                <input
+                                  value={s.pages}
+                                  onChange={(e) => updateSubEntry(i, { pages: e.target.value })}
+                                  className="w-full text-xs font-mono text-gray-500 bg-transparent focus:outline-none focus:bg-white focus:border focus:border-teal-300 rounded px-1"
+                                  placeholder="p. 12"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <AutoResizeTextarea
+                                  value={s.content}
+                                  onChange={(v) => updateSubEntry(i, { content: v })}
+                                  placeholder="Ideia ou citação…"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <button onClick={() => removeSubEntry(i)} className="text-gray-300 hover:text-red-500 transition-colors">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {/* Add new sub-entry */}
+                  <div className="flex gap-2 items-start">
+                    <Input
+                      value={newPages}
+                      onChange={(e) => setNewPages(e.target.value)}
+                      placeholder="p. 12"
+                      className="h-8 text-xs w-24 flex-shrink-0"
+                    />
+                    <textarea
+                      value={newContent}
+                      onChange={(e) => setNewContent(e.target.value)}
+                      placeholder="Nova ideia ou citação… (Ctrl+Enter para adicionar)"
+                      rows={2}
+                      className="flex-1 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-teal-400 resize-none"
+                      onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); addSubEntry() } }}
+                    />
+                    <button
+                      onClick={addSubEntry}
+                      disabled={!newPages.trim() || !newContent.trim()}
+                      className="h-8 px-2 rounded-md border border-gray-200 text-gray-500 hover:bg-green-50 hover:text-green-600 hover:border-green-300 disabled:opacity-40 transition-colors flex-shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>
 
           <div className="flex items-center gap-1 ml-2 shrink-0">
-            <button onClick={() => exportFichamentoMarkdown(f)} title="Exportar .md" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => exportFichamentoMarkdown(data)} title="Exportar .md" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
               <FileText className="w-4 h-4" />
             </button>
-            <button onClick={() => exportFichamentoPDF(f)} title="Exportar PDF" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => exportFichamentoPDF(data)} title="Exportar PDF" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
               <Download className="w-4 h-4" />
             </button>
-            <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors">
+            <button onClick={onEdit} title="Editar metadados" className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors">
               <Edit2 className="w-4 h-4" />
             </button>
             <button onClick={onDelete} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
@@ -610,6 +657,25 @@ function FichamentoCard({ f, refFormat, onEdit, onDelete }: {
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+// Auto-resizing plain textarea for sub-entry content
+function AutoResizeTextarea({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    if (ref.current) { ref.current.style.height = 'auto'; ref.current.style.height = ref.current.scrollHeight + 'px' }
+  }, [value])
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      rows={1}
+      className="w-full text-sm text-gray-800 bg-transparent focus:outline-none focus:bg-white focus:border focus:border-teal-300 rounded px-1 py-0.5 resize-none overflow-hidden"
+      style={{ minHeight: '1.5rem' }}
+    />
   )
 }
 
@@ -626,6 +692,7 @@ export function Fichamentos() {
   const [refFormat, setRefFormat] = useState<'abnt' | 'apa' | 'tabela'>('abnt')
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Fichamento | undefined>()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (isDemoMode) return
@@ -666,11 +733,13 @@ export function Fichamentos() {
         toast({ title: 'Erro ao salvar', description: msg, variant: 'destructive' }); return
       }
     }
+    const isNew = !editing
     setFichamentos((prev) => {
       const idx = prev.findIndex((x) => x.id === f.id)
       if (idx >= 0) { const next = [...prev]; next[idx] = f; return next }
       return [f, ...prev]
     })
+    if (isNew) setExpandedId(f.id)
     setFormOpen(false); setEditing(undefined)
     toast({ title: editing ? 'Fichamento atualizado' : 'Fichamento criado' })
   }
@@ -754,13 +823,25 @@ export function Fichamentos() {
       ) : viewMode === 'list' ? (
         <div className="space-y-3">
           {filtered.map((f) => (
-            <FichamentoCard key={f.id} f={f} refFormat={refFormat} onEdit={() => { setEditing(f); setFormOpen(true) }} onDelete={() => handleDelete(f.id)} />
+            <FichamentoCard key={f.id} f={f} refFormat={refFormat}
+              onEdit={() => { setEditing(f); setFormOpen(true) }}
+              onDelete={() => handleDelete(f.id)}
+              onUpdate={(upd) => setFichamentos((prev) => prev.map((x) => x.id === upd.id ? upd : x))}
+              isDemoMode={isDemoMode}
+              defaultExpanded={expandedId === f.id}
+            />
           ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filtered.map((f) => (
-            <FichamentoCard key={f.id} f={f} refFormat={refFormat} onEdit={() => { setEditing(f); setFormOpen(true) }} onDelete={() => handleDelete(f.id)} />
+            <FichamentoCard key={f.id} f={f} refFormat={refFormat}
+              onEdit={() => { setEditing(f); setFormOpen(true) }}
+              onDelete={() => handleDelete(f.id)}
+              onUpdate={(upd) => setFichamentos((prev) => prev.map((x) => x.id === upd.id ? upd : x))}
+              isDemoMode={isDemoMode}
+              defaultExpanded={expandedId === f.id}
+            />
           ))}
         </div>
       )}

@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import jsPDF from 'jspdf'
 import { load as yamlLoad } from 'js-yaml'
 import {
@@ -21,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToastContainer } from '@/components/ui/toast'
-import { MarkdownEditor } from '@/components/shared/MarkdownEditor'
+import { InlineMarkdownField } from '@/components/shared/MarkdownEditor'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/hooks/useToast'
 import { loadRevisoes, saveRevisao, deleteRevisao } from '@/lib/storage'
@@ -169,38 +167,6 @@ const INSTITUICOES_BRASIL = [
   'Instituto Nacional do Semiárido (INSA)',
   'Outra',
 ]
-
-// ─── Page-number tagging ───────────────────────────────────────────────────
-
-// PAGE_REGEX used in PageTaggedMarkdown and renderTextWithPageTags
-const _PAGE_REGEX = /\b(pp?\.\s*\d+(?:[–\-]\d+)?)/g
-void _PAGE_REGEX // regex is inlined in consumers; keep for documentation
-
-
-function PageTaggedMarkdown({ content }: { content: string }) {
-  if (!content) return null
-  // Replace page refs with pseudo-links so they stay inline within markdown paragraphs
-  const processed = content.replace(/\b(pp?\.\s*\d+(?:[–\-]\d+)?)/g, (m) => `[${m}](#pg)`)
-  return (
-    <div className="prose prose-sm max-w-none text-gray-700">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ href, children }) =>
-            href === '#pg' ? (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono bg-teal-100 text-teal-800 mx-0.5 select-none">
-                {children}
-              </span>
-            ) : (
-              <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
-            ),
-        }}
-      >
-        {processed}
-      </ReactMarkdown>
-    </div>
-  )
-}
 
 // ─── Reference format helpers ─────────────────────────────────────────────
 
@@ -755,17 +721,6 @@ function ArguicaoForm({
   const [form, setForm] = useState<Omit<Arguicao, 'id' | 'created_at' | 'updated_at'>>(
     initial ? { ...initial } : { ...EMPTY_ARGUICAO }
   )
-  const [secoes, setSecoes] = useState<{ id: string; label: string; content: string }[]>(
-    () => initial?.secoes ?? (initial ? [
-      { id: crypto.randomUUID(), label: 'Comentários Gerais',     content: initial.comentariosGerais     || '' },
-      { id: crypto.randomUUID(), label: 'Questões Teóricas',       content: initial.questoesTeoricas       || '' },
-      { id: crypto.randomUUID(), label: 'Questões Metodológicas',  content: initial.questoesMetodologicas  || '' },
-      { id: crypto.randomUUID(), label: 'Comentários Específicos', content: initial.comentariosEspecificos || '' },
-      { id: crypto.randomUUID(), label: 'Conclusões',              content: initial.conclusoes             || '' },
-    ] : makeDefaultSecoes())
-  )
-  const [editingLabelIdx, setEditingLabelIdx] = useState<number | null>(null)
-  const [labelDraft, setLabelDraft] = useState('')
   const [newMembro, setNewMembro] = useState('')
   const [customInst, setCustomInst] = useState(
     initial && !INSTITUICOES_BRASIL.includes(initial.instituicao) && initial.instituicao !== 'Outra'
@@ -797,7 +752,8 @@ function ArguicaoForm({
     const now = new Date().toISOString()
     onSave({
       ...form,
-      secoes,
+      // Preserve existing secoes on edit; create defaults for new entries
+      secoes: initial?.secoes ?? (initial ? getArguicaoSecoes(initial) : makeDefaultSecoes()),
       id: initial?.id ?? crypto.randomUUID(),
       created_at: initial?.created_at ?? now,
       updated_at: now,
@@ -898,75 +854,7 @@ function ArguicaoForm({
         </div>
       </div>
 
-      <div className="border-t pt-4 space-y-3">
-        {secoes.map((secao, idx) => (
-          <div key={secao.id}>
-            <div className="flex items-center gap-1 mb-1">
-              {editingLabelIdx === idx ? (
-                <input
-                  autoFocus
-                  className="text-xs font-medium flex-1 border border-teal-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-teal-400"
-                  value={labelDraft}
-                  onChange={e => setLabelDraft(e.target.value)}
-                  onBlur={() => {
-                    setSecoes(prev => prev.map((s, i) => i === idx ? { ...s, label: labelDraft.trim() || s.label } : s))
-                    setEditingLabelIdx(null)
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') { setSecoes(prev => prev.map((s, i) => i === idx ? { ...s, label: labelDraft.trim() || s.label } : s)); setEditingLabelIdx(null) }
-                    if (e.key === 'Escape') setEditingLabelIdx(null)
-                  }}
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="text-xs font-medium text-gray-700 flex items-center gap-1 group hover:text-teal-700"
-                  onClick={() => { setLabelDraft(secao.label); setEditingLabelIdx(idx) }}
-                  title="Clique para renomear"
-                >
-                  {secao.label}
-                  <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setSecoes(prev => prev.filter((_, i) => i !== idx))}
-                className="ml-auto text-gray-300 hover:text-red-400 transition-colors"
-                title="Remover seção"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <MarkdownEditor
-              value={secao.content}
-              onChange={v => setSecoes(prev => prev.map((s, i) => i === idx ? { ...s, content: v } : s))}
-              placeholder={`${secao.label}... (use p. X ou pp. X-Y para citar páginas)`}
-              minHeight={80}
-            />
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => setSecoes(prev => [...prev, { id: crypto.randomUUID(), label: 'Nova seção', content: '' }])}
-          className="flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-700 font-medium"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Adicionar seção
-        </button>
-        <div className="border-t pt-3">
-          <Label className="text-xs text-gray-500">
-            Anotações de Outros Membros da Banca <span className="font-normal">(campo fixo, opcional)</span>
-          </Label>
-          <div className="mt-1">
-            <MarkdownEditor
-              value={form.anotacaoOutrosMembros}
-              onChange={(v) => set('anotacaoOutrosMembros', v)}
-              placeholder="Anotações de Outros Membros da Banca... (use p. X ou pp. X-Y para citar páginas)"
-              minHeight={80}
-            />
-          </div>
-        </div>
-      </div>
+      <p className="text-xs text-gray-400 italic border-t pt-3">As seções de conteúdo podem ser editadas diretamente no card após salvar.</p>
 
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onClose}>Cancelar</Button>
@@ -1029,21 +917,7 @@ function ParecerForm({
         <Input value={form.solicitante} onChange={(e) => set('solicitante', e.target.value)}
           placeholder="Ex.: Edital nº 01/2026, Revista X, CNPQ chamada Y..." className="mt-1" />
       </div>
-      <div>
-        <Label className="text-xs">Parecer</Label>
-        <div className="mt-1">
-          <MarkdownEditor
-            value={form.parecer}
-            onChange={(v) => set('parecer', v)}
-            placeholder="Texto do parecer... (use p. X ou pp. X-Y para citar páginas)"
-            minHeight={200}
-          />
-        </div>
-        <div className="flex gap-4 mt-1.5 text-xs text-gray-400 select-none">
-          <span>{form.parecer.length} {form.parecer.length === 1 ? 'caractere' : 'caracteres'}</span>
-          <span>{form.parecer.trim() === '' ? 0 : form.parecer.trim().split(/\s+/).length} {form.parecer.trim().split(/\s+/).filter(Boolean).length === 1 ? 'palavra' : 'palavras'}</span>
-        </div>
-      </div>
+      <p className="text-xs text-gray-400 italic">O texto do parecer pode ser editado diretamente no card após salvar.</p>
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="outline" onClick={onClose}>Cancelar</Button>
         <Button onClick={handleSave} disabled={!form.titulo.trim() || !form.solicitante.trim()} className="bg-teal-600 hover:bg-teal-700 text-white">
@@ -1059,13 +933,52 @@ function ParecerForm({
 type RefFormat = 'abnt' | 'apa' | 'tabela'
 
 function ArguicaoCard({
-  a, refFormat, onEdit, onDelete,
+  a, refFormat, onEdit, onDelete, onUpdate, isDemoMode, defaultExpanded = false,
 }: {
   a: Arguicao; refFormat: RefFormat; onEdit: () => void; onDelete: () => void
+  onUpdate: (updated: Arguicao) => void; isDemoMode: boolean; defaultExpanded?: boolean
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const tipo = a.tipoBanca === 'outro' ? (a.tipoOutro || 'Outro') : TIPO_LABELS[a.tipoBanca]
-  const modalidade = a.modalidade ? ` · ${a.modalidade === 'qualificacao' ? 'Qualificação' : 'Defesa'}` : ''
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [data, setData] = useState(a)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [editingLabelIdx, setEditingLabelIdx] = useState<number | null>(null)
+  const [labelDraft, setLabelDraft] = useState('')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => { setData(a) }, [a])
+
+  const triggerSave = useCallback((updated: Arguicao) => {
+    setSaveStatus('unsaved')
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      try {
+        if (!isDemoMode) await saveRevisao(updated)
+        onUpdate(updated)
+        setSaveStatus('saved')
+      } catch { setSaveStatus('unsaved') }
+    }, 1500)
+  }, [isDemoMode, onUpdate])
+
+  function updateContent(updated: Arguicao) { setData(updated); triggerSave(updated) }
+
+  const secoes = getArguicaoSecoes(data)
+
+  function updateSecao(idx: number, patch: Partial<{ label: string; content: string }>) {
+    const next = secoes.map((s, i) => i === idx ? { ...s, ...patch } : s)
+    updateContent({ ...data, secoes: next, anotacaoOutrosMembros: data.anotacaoOutrosMembros })
+  }
+
+  function removeSecao(idx: number) {
+    updateContent({ ...data, secoes: secoes.filter((_, i) => i !== idx), anotacaoOutrosMembros: data.anotacaoOutrosMembros })
+  }
+
+  function addSecao() {
+    updateContent({ ...data, secoes: [...secoes, { id: crypto.randomUUID(), label: 'Nova seção', content: '' }], anotacaoOutrosMembros: data.anotacaoOutrosMembros })
+  }
+
+  const tipo = data.tipoBanca === 'outro' ? (data.tipoOutro || 'Outro') : TIPO_LABELS[data.tipoBanca]
+  const modalidade = data.modalidade ? ` · ${data.modalidade === 'qualificacao' ? 'Qualificação' : 'Defesa'}` : ''
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -1079,26 +992,34 @@ function ArguicaoCard({
               <Badge className="text-xs bg-teal-100 text-teal-700 border-teal-200">Arguição</Badge>
               <Badge variant="outline" className="text-xs">{tipo}{modalidade}</Badge>
             </div>
-            <p className="font-semibold text-gray-900 leading-snug mt-1">{a.titulo}</p>
-            <p className="text-sm text-gray-500 mt-0.5">{a.autor} · {a.instituicao}</p>
+            <p className="font-semibold text-gray-900 leading-snug mt-1">{data.titulo}</p>
+            <p className="text-sm text-gray-500 mt-0.5">{data.autor} · {data.instituicao}</p>
             <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> {formatDate(a.data)}
+              <Calendar className="w-3 h-3" /> {formatDate(data.data)}
             </p>
             {!expanded && refFormat !== 'tabela' && (
               <p className="text-xs text-gray-500 mt-2 italic line-clamp-2">
-                {refFormat === 'abnt' ? formatABNTArguicao(a).replace(/\*\*/g, '') : formatAPAArguicao(a).replace(/\*/g, '')}
+                {refFormat === 'abnt' ? formatABNTArguicao(data).replace(/\*\*/g, '') : formatAPAArguicao(data).replace(/\*/g, '')}
               </p>
             )}
             {expanded && (
               <div className="mt-4 space-y-4">
+                {/* Auto-save indicator */}
+                <div className="flex justify-end">
+                  <span className={`text-xs select-none transition-opacity ${saveStatus === 'saved' ? 'text-gray-300' : saveStatus === 'saving' ? 'text-gray-400' : 'text-amber-500'}`}>
+                    {saveStatus === 'saving' ? 'Salvando…' : saveStatus === 'unsaved' ? '● Não salvo' : '✓ Salvo'}
+                  </span>
+                </div>
+
+                {/* Reference block */}
                 {refFormat === 'tabela' ? (
                   <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
                     <tbody>
                       {[
-                        ['Título', a.titulo], ['Autor(a)', a.autor], ['Orientador(a)', a.orientador],
-                        ['Instituição', a.instituicao], ['Data', formatDate(a.data)],
+                        ['Título', data.titulo], ['Autor(a)', data.autor], ['Orientador(a)', data.orientador],
+                        ['Instituição', data.instituicao], ['Data', formatDate(data.data)],
                         ['Tipo', tipo + modalidade],
-                        ...(a.bancaMembers.length > 0 ? [['Banca', a.bancaMembers.join('; ')]] : []),
+                        ...(data.bancaMembers.length > 0 ? [['Banca', data.bancaMembers.join('; ')]] : []),
                       ].map(([label, value]) => (
                         <tr key={label} className="border-b border-gray-100 last:border-0">
                           <td className="px-3 py-2 text-xs font-semibold text-gray-500 bg-gray-50 w-36">{label}</td>
@@ -1109,31 +1030,87 @@ function ArguicaoCard({
                   </table>
                 ) : (
                   <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-700 font-mono leading-relaxed">
-                    {refFormat === 'abnt' ? formatABNTArguicao(a).replace(/\*\*/g, '') : formatAPAArguicao(a).replace(/\*/g, '')}
+                    {refFormat === 'abnt' ? formatABNTArguicao(data).replace(/\*\*/g, '') : formatAPAArguicao(data).replace(/\*/g, '')}
                   </div>
                 )}
-                {getArguicaoSecoes(a).filter(s => s.content?.trim()).map(s => (
-                  <div key={s.id}>
-                    <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1">{s.label}</p>
-                    <div className="text-sm text-gray-700 leading-relaxed">
-                      <PageTaggedMarkdown content={s.content} />
+
+                {/* Content sections — inline editable */}
+                {secoes.map((secao, idx) => (
+                  <div key={secao.id}>
+                    <div className="flex items-center gap-1 mb-1.5">
+                      {editingLabelIdx === idx ? (
+                        <input
+                          autoFocus
+                          className="text-xs font-semibold flex-1 border border-teal-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-teal-400 uppercase tracking-wide text-teal-700"
+                          value={labelDraft}
+                          onChange={(e) => setLabelDraft(e.target.value)}
+                          onBlur={() => { updateSecao(idx, { label: labelDraft.trim() || secao.label }); setEditingLabelIdx(null) }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { updateSecao(idx, { label: labelDraft.trim() || secao.label }); setEditingLabelIdx(null) }
+                            if (e.key === 'Escape') setEditingLabelIdx(null)
+                          }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-teal-700 uppercase tracking-wide flex items-center gap-1 group hover:text-teal-800"
+                          onClick={() => { setLabelDraft(secao.label); setEditingLabelIdx(idx) }}
+                          title="Clique para renomear"
+                        >
+                          {secao.label}
+                          <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-50 transition-opacity" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeSecao(idx)}
+                        className="ml-auto text-gray-300 hover:text-red-400 transition-colors"
+                        title="Remover seção"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
+                    <InlineMarkdownField
+                      value={secao.content}
+                      onChange={(v) => updateSecao(idx, { content: v })}
+                      placeholder={`${secao.label}…`}
+                    />
                   </div>
                 ))}
+
+                <button
+                  type="button"
+                  onClick={addSecao}
+                  className="flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-700 font-medium"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Adicionar seção
+                </button>
+
+                {/* Anotações de Outros Membros — fixed optional section */}
+                <div className="border-t pt-3">
+                  <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1.5">
+                    Anotações de Outros Membros da Banca <span className="font-normal text-gray-400 normal-case">(opcional)</span>
+                  </p>
+                  <InlineMarkdownField
+                    value={data.anotacaoOutrosMembros}
+                    onChange={(v) => updateContent({ ...data, secoes, anotacaoOutrosMembros: v })}
+                    placeholder="Anotações de outros membros…"
+                  />
+                </div>
               </div>
             )}
           </div>
           <div className="flex items-center gap-1 ml-2 shrink-0">
-            <button onClick={() => exportArguicaoPDF(a)} title="Exportar PDF" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => exportArguicaoPDF(data)} title="Exportar PDF" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
               <Download className="w-4 h-4" />
             </button>
-            <button onClick={() => exportArguicaoMarkdown(a)} title="Exportar Markdown" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => exportArguicaoMarkdown(data)} title="Exportar Markdown" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
               <FileText className="w-4 h-4" />
             </button>
-            <button onClick={() => exportArguicaoDocx(a)} title="Exportar DOCX" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => exportArguicaoDocx(data)} title="Exportar DOCX" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
               <BookOpen className="w-4 h-4" />
             </button>
-            <button onClick={onEdit} title="Editar" className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-md transition-colors">
+            <button onClick={onEdit} title="Editar metadados" className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-md transition-colors">
               <Edit2 className="w-4 h-4" />
             </button>
             <button onClick={onDelete} title="Excluir" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
@@ -1152,11 +1129,35 @@ function ArguicaoCard({
 // ─── Parecer card ──────────────────────────────────────────────────────────
 
 function ParecerCard({
-  p, onEdit, onDelete,
+  p, onEdit, onDelete, onUpdate, isDemoMode, defaultExpanded = false,
 }: {
   p: Parecer; onEdit: () => void; onDelete: () => void
+  onUpdate: (updated: Parecer) => void; isDemoMode: boolean; defaultExpanded?: boolean
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [data, setData] = useState(p)
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+
+  useEffect(() => { setData(p) }, [p])
+
+  const triggerSave = useCallback((updated: Parecer) => {
+    setSaveStatus('unsaved')
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(async () => {
+      setSaveStatus('saving')
+      try {
+        if (!isDemoMode) await saveRevisao(updated)
+        onUpdate(updated)
+        setSaveStatus('saved')
+      } catch { setSaveStatus('unsaved') }
+    }, 1500)
+  }, [isDemoMode, onUpdate])
+
+  function updateContent(updated: Parecer) { setData(updated); triggerSave(updated) }
+
+  const wordCount = data.parecer.trim() ? data.parecer.trim().split(/\s+/).length : 0
+  const charCount = data.parecer.length
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -1169,34 +1170,49 @@ function ParecerCard({
             <div className="flex items-center gap-2">
               <Badge className="text-xs bg-cyan-100 text-cyan-700 border-cyan-200">Parecer</Badge>
             </div>
-            <p className="font-semibold text-gray-900 leading-snug mt-1">{p.titulo}</p>
+            <p className="font-semibold text-gray-900 leading-snug mt-1">{data.titulo}</p>
             <p className="text-sm text-gray-500 mt-0.5">
-              {p.autor ? p.autor : <em className="text-gray-400">Avaliação cega</em>}
-              {' · '}{p.solicitante}
+              {data.autor ? data.autor : <em className="text-gray-400">Avaliação cega</em>}
+              {' · '}{data.solicitante}
             </p>
             <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-              <Calendar className="w-3 h-3" /> {formatDate(p.data)}
+              <Calendar className="w-3 h-3" /> {formatDate(data.data)}
             </p>
-            {expanded && p.parecer.trim() && (
-              <div className="mt-4">
-                <p className="text-xs font-semibold text-cyan-700 uppercase tracking-wide mb-1">Parecer</p>
-                <div className="text-sm text-gray-700 leading-relaxed">
-                  <PageTaggedMarkdown content={p.parecer} />
+            {expanded && (
+              <div className="mt-4 space-y-3">
+                {/* Auto-save indicator */}
+                <div className="flex justify-end">
+                  <span className={`text-xs select-none transition-opacity ${saveStatus === 'saved' ? 'text-gray-300' : saveStatus === 'saving' ? 'text-gray-400' : 'text-amber-500'}`}>
+                    {saveStatus === 'saving' ? 'Salvando…' : saveStatus === 'unsaved' ? '● Não salvo' : '✓ Salvo'}
+                  </span>
+                </div>
+
+                {/* Parecer — inline editable */}
+                <div>
+                  <p className="text-xs font-semibold text-cyan-700 uppercase tracking-wide mb-1.5">Parecer</p>
+                  <InlineMarkdownField
+                    value={data.parecer}
+                    onChange={(v) => updateContent({ ...data, parecer: v })}
+                    placeholder="Escreva o parecer aqui…"
+                  />
+                  <p className="text-xs text-gray-400 mt-1.5 text-right">
+                    {wordCount} {wordCount === 1 ? 'palavra' : 'palavras'} · {charCount} caracteres
+                  </p>
                 </div>
               </div>
             )}
           </div>
           <div className="flex items-center gap-1 ml-2 shrink-0">
-            <button onClick={() => exportParecerPDF(p)} title="Exportar PDF" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => exportParecerPDF(data)} title="Exportar PDF" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
               <Download className="w-4 h-4" />
             </button>
-            <button onClick={() => exportParecerMarkdown(p)} title="Exportar Markdown" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => exportParecerMarkdown(data)} title="Exportar Markdown" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
               <FileText className="w-4 h-4" />
             </button>
-            <button onClick={() => exportParecerDocx(p)} title="Exportar DOCX" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
+            <button onClick={() => exportParecerDocx(data)} title="Exportar DOCX" className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors">
               <BookOpen className="w-4 h-4" />
             </button>
-            <button onClick={onEdit} title="Editar" className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-md transition-colors">
+            <button onClick={onEdit} title="Editar metadados" className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-md transition-colors">
               <Edit2 className="w-4 h-4" />
             </button>
             <button onClick={onDelete} title="Excluir" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
@@ -1453,6 +1469,7 @@ export function Revisoes() {
   const [sortAsc, setSortAsc] = useState(false)
   const [search, setSearch] = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     if (isDemoMode) return
@@ -1476,7 +1493,10 @@ export function Revisoes() {
     }
     setRevisoes((prev) => {
       const idx = prev.findIndex((x) => x.id === r.id)
-      return idx >= 0 ? prev.map((x) => x.id === r.id ? r : x) : [r, ...prev]
+      if (idx >= 0) return prev.map((x) => x.id === r.id ? r : x)
+      // New entry — auto-expand it
+      setExpandedId(r.id)
+      return [r, ...prev]
     })
     setFormType(null); setEditing(undefined)
     toast({ title: 'Revisão salva' })
@@ -1696,12 +1716,18 @@ export function Revisoes() {
               key={r.id} a={r} refFormat={refFormat}
               onEdit={() => openEdit(r)}
               onDelete={() => handleDelete(r.id)}
+              onUpdate={(updated) => setRevisoes((prev) => prev.map((x) => x.id === updated.id ? updated : x))}
+              isDemoMode={isDemoMode}
+              defaultExpanded={expandedId === r.id}
             />
           ) : (
             <ParecerCard
               key={r.id} p={r}
               onEdit={() => openEdit(r)}
               onDelete={() => handleDelete(r.id)}
+              onUpdate={(updated) => setRevisoes((prev) => prev.map((x) => x.id === updated.id ? updated : x))}
+              isDemoMode={isDemoMode}
+              defaultExpanded={expandedId === r.id}
             />
           )
         )}
