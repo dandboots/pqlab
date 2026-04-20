@@ -539,23 +539,65 @@ export function InlineMarkdownField({
   const [draft, setDraft] = useState(value)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Captures click position for cursor placement on edit entry
+  const clickCoordsRef = useRef<{ x: number; y: number } | null>(null)
+  const justEnteredEdit = useRef(false)
 
   // Sync draft when value changes externally (e.g. parent reloads data)
   useEffect(() => {
     if (!isEditing) setDraft(value)
   }, [value, isEditing])
 
-  // Auto-resize textarea on every draft change
+  // Auto-resize + cursor positioning on edit entry
   useLayoutEffect(() => {
-    if (isEditing && textareaRef.current) {
-      const ta = textareaRef.current
-      ta.style.height = 'auto'
-      ta.style.height = ta.scrollHeight + 'px'
+    if (!isEditing || !textareaRef.current) return
+    const ta = textareaRef.current
+
+    // Always resize to fit content
+    ta.style.height = 'auto'
+    ta.style.height = ta.scrollHeight + 'px'
+
+    // On first render after entering edit mode: position cursor at click location
+    if (justEnteredEdit.current) {
+      justEnteredEdit.current = false
+      const coords = clickCoordsRef.current
+      clickCoordsRef.current = null
+
+      // Use rAF so this runs after browser's autoFocus (which resets cursor to 0)
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current
+        if (!ta) return
+
+        let offset = ta.value.length  // fallback: end of text
+
+        if (coords) {
+          // Estimate which line the user clicked by comparing Y position
+          const taRect = ta.getBoundingClientRect()
+          const relY = coords.y - taRect.top
+          const style = getComputedStyle(ta)
+          const lineHeight = parseFloat(style.lineHeight) || 20
+          const paddingTop = parseFloat(style.paddingTop) || 0
+          const lineIndex = Math.max(0, Math.floor((relY - paddingTop) / lineHeight))
+
+          // Place cursor at the end of the estimated line
+          const lines = ta.value.split('\n')
+          let lineOffset = 0
+          for (let i = 0; i < Math.min(lineIndex, lines.length - 1); i++) {
+            lineOffset += lines[i].length + 1  // +1 for \n
+          }
+          offset = lineOffset + (lines[Math.min(lineIndex, lines.length - 1)] ?? '').length
+        }
+
+        offset = Math.max(0, Math.min(offset, ta.value.length))
+        ta.setSelectionRange(offset, offset)
+      })
     }
   }, [isEditing, draft])
 
-  function enterEdit() {
+  function enterEdit(e: React.MouseEvent) {
     if (readOnly) return
+    clickCoordsRef.current = { x: e.clientX, y: e.clientY }
+    justEnteredEdit.current = true
     setDraft(value)
     setIsEditing(true)
   }
@@ -651,14 +693,8 @@ export function InlineMarkdownField({
         onBlur={handleBlur}
         autoFocus
         placeholder={placeholder}
-        className={cn(
-          'w-full resize-none',
-          'pl-5 pr-2 py-0',
-          'text-sm font-sans text-gray-800 leading-relaxed',
-          'bg-transparent border-0 outline-none ring-0 focus:ring-0',
-          'min-h-[2rem] placeholder:text-gray-400 placeholder:italic',
-        )}
-        style={{ overflow: 'hidden' }}
+        className="w-full resize-none pl-5 pr-2 py-0 bg-transparent border-0 outline-none ring-0 focus:ring-0 min-h-[2rem] placeholder:text-gray-400 placeholder:italic"
+        style={{ overflow: 'hidden', font: 'inherit', color: 'inherit', lineHeight: 'inherit' }}
       />
     </div>
   )
