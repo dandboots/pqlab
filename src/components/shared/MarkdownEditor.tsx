@@ -548,51 +548,48 @@ export function InlineMarkdownField({
     if (!isEditing) setDraft(value)
   }, [value, isEditing])
 
-  // Auto-resize + cursor positioning on edit entry
+  // Auto-resize on every draft change
   useLayoutEffect(() => {
     if (!isEditing || !textareaRef.current) return
     const ta = textareaRef.current
+    ta.style.height = 'auto'
+    ta.style.height = ta.scrollHeight + 'px'
+  }, [isEditing, draft])
 
-    // Always resize to fit content
+  // On first render in edit mode: focus WITHOUT scroll + place cursor at click position.
+  // Everything here runs synchronously before the browser paints → zero visible jump.
+  useLayoutEffect(() => {
+    if (!isEditing || !justEnteredEdit.current || !textareaRef.current) return
+    justEnteredEdit.current = false
+    const ta = textareaRef.current
+    const coords = clickCoordsRef.current
+    clickCoordsRef.current = null
+
+    // Resize first so getBoundingClientRect() returns the final geometry
     ta.style.height = 'auto'
     ta.style.height = ta.scrollHeight + 'px'
 
-    // On first render after entering edit mode: position cursor at click location
-    if (justEnteredEdit.current) {
-      justEnteredEdit.current = false
-      const coords = clickCoordsRef.current
-      clickCoordsRef.current = null
+    // Focus without scrolling (prevents the page from jumping to position 0)
+    ta.focus({ preventScroll: true })
 
-      // Use rAF so this runs after browser's autoFocus (which resets cursor to 0)
-      requestAnimationFrame(() => {
-        const ta = textareaRef.current
-        if (!ta) return
-
-        let offset = ta.value.length  // fallback: end of text
-
-        if (coords) {
-          // Estimate which line the user clicked by comparing Y position
-          const taRect = ta.getBoundingClientRect()
-          const relY = coords.y - taRect.top
-          const style = getComputedStyle(ta)
-          const lineHeight = parseFloat(style.lineHeight) || 20
-          const paddingTop = parseFloat(style.paddingTop) || 0
-          const lineIndex = Math.max(0, Math.floor((relY - paddingTop) / lineHeight))
-
-          // Place cursor at the end of the estimated line
-          const lines = ta.value.split('\n')
-          let lineOffset = 0
-          for (let i = 0; i < Math.min(lineIndex, lines.length - 1); i++) {
-            lineOffset += lines[i].length + 1  // +1 for \n
-          }
-          offset = lineOffset + (lines[Math.min(lineIndex, lines.length - 1)] ?? '').length
-        }
-
-        offset = Math.max(0, Math.min(offset, ta.value.length))
-        ta.setSelectionRange(offset, offset)
-      })
+    // Estimate which line/offset the user clicked and place cursor there
+    let offset = ta.value.length  // fallback: end of text
+    if (coords) {
+      const taRect = ta.getBoundingClientRect()
+      const relY = coords.y - taRect.top
+      const style = getComputedStyle(ta)
+      const lineHeight = parseFloat(style.lineHeight) || 20
+      const paddingTop = parseFloat(style.paddingTop) || 0
+      const lineIndex = Math.max(0, Math.floor((relY - paddingTop) / lineHeight))
+      const lines = ta.value.split('\n')
+      let lineOffset = 0
+      for (let i = 0; i < Math.min(lineIndex, lines.length - 1); i++) {
+        lineOffset += lines[i].length + 1  // +1 for \n
+      }
+      offset = lineOffset + (lines[Math.min(lineIndex, lines.length - 1)] ?? '').length
     }
-  }, [isEditing, draft])
+    ta.setSelectionRange(Math.min(offset, ta.value.length), Math.min(offset, ta.value.length))
+  }, [isEditing])
 
   function enterEdit(e: React.MouseEvent) {
     if (readOnly) return
@@ -691,7 +688,6 @@ export function InlineMarkdownField({
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         onBlur={handleBlur}
-        autoFocus
         placeholder={placeholder}
         className="w-full resize-none pl-5 pr-2 py-0 bg-transparent border-0 outline-none ring-0 focus:ring-0 min-h-[2rem] placeholder:text-gray-400 placeholder:italic"
         style={{ overflow: 'hidden', font: 'inherit', color: 'inherit', lineHeight: 'inherit' }}
