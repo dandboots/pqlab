@@ -457,6 +457,8 @@ export function InlineMarkdownRenderer({ content, className }: { content: string
     <div className={cn(
       'prose prose-sm max-w-none pl-5 dark:prose-invert text-gray-800 leading-relaxed',
       '[&_p]:my-2 [&_p+p]:mt-3',  // generous paragraph spacing
+      // Zero outer margins so first-line Y=0 matches the textarea's py-0 — prevents visual jump on edit
+      '[&>*:first-child]:!mt-0 [&>*:last-child]:!mb-0',
       className
     )}>
       <InlineWikiMarkdown content={content} />
@@ -650,7 +652,7 @@ export function InlineMarkdownField({
   // is absolutely positioned on top of it, pixel-aligned.
   // Zero layout shift on entry or exit from editing.
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
+    <div ref={containerRef} className={cn('relative text-sm leading-relaxed', className)}>
       {/* Rendered view — always in layout flow, determines container height */}
       <div
         ref={viewRef}

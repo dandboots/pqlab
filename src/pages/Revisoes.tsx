@@ -33,7 +33,7 @@ const DEMO: Revisao[] = [
     id: '1', subtype: 'arguicao',
     titulo: 'Memória, identidade e resistência: trajetórias de mulheres quilombolas no Baixo Amazonas',
     autor: 'Ana Clara Ferreira Lima',
-    instituicao: 'Universidade Federal do Pará (UFPA)',
+    instituicao: 'UFPA - Universidade Federal do Pará',
     orientador: 'Prof. Dr. Carlos Eduardo Moreira',
     bancaMembers: ['Profa. Dra. Silvia Rodrigues (UFAM)', 'Prof. Dr. Marcos Antônio Souza (UEPA)'],
     tipoBanca: 'mestrado-academico', modalidade: 'defesa',
@@ -60,112 +60,111 @@ const DEMO: Revisao[] = [
 
 const INSTITUICOES_BRASIL = [
   // Federais
-  'Universidade de Brasília (UnB)',
-  'Universidade Federal do ABC (UFABC)',
-  'Universidade Federal da Bahia (UFBA)',
-  'Universidade Federal do Ceará (UFC)',
-  'Universidade Federal do Espírito Santo (UFES)',
-  'Universidade Federal de Goiás (UFG)',
-  'Universidade Federal do Maranhão (UFMA)',
-  'Universidade Federal de Minas Gerais (UFMG)',
-  'Universidade Federal do Mato Grosso (UFMT)',
-  'Universidade Federal do Mato Grosso do Sul (UFMS)',
-  'Universidade Federal do Pará (UFPA)',
-  'Universidade Federal da Paraíba (UFPB)',
-  'Universidade Federal de Pelotas (UFPel)',
-  'Universidade Federal de Pernambuco (UFPE)',
-  'Universidade Federal do Piauí (UFPI)',
-  'Universidade Federal do Paraná (UFPR)',
-  'Universidade Federal do Rio de Janeiro (UFRJ)',
-  'Universidade Federal do Rio Grande do Norte (UFRN)',
-  'Universidade Federal do Rio Grande do Sul (UFRGS)',
-  'Universidade Federal de Rondônia (UNIR)',
-  'Universidade Federal de Roraima (UFRR)',
-  'Universidade Federal de Santa Catarina (UFSC)',
-  'Universidade Federal de Santa Maria (UFSM)',
-  'Universidade Federal de São Carlos (UFSCar)',
-  'Universidade Federal de São Paulo (UNIFESP)',
-  'Universidade Federal de Sergipe (UFS)',
-  'Universidade Federal do Tocantins (UFT)',
-  'Universidade Federal da Integração Latino-Americana (UNILA)',
-  'Universidade Federal da Fronteira Sul (UFFS)',
-  'Universidade Federal do Recôncavo da Bahia (UFRB)',
-  'Universidade Federal Rural do Rio de Janeiro (UFRRJ)',
-  'Universidade Federal Rural de Pernambuco (UFRPE)',
-  'Universidade Federal Rural da Amazônia (UFRA)',
-  'Universidade Federal do Amazonas (UFAM)',
-  'Universidade Federal do Acre (UFAC)',
-  'Universidade Federal de Alagoas (UFAL)',
-  'Universidade Federal do Amapá (UNIFAP)',
-  'Universidade Federal de Itajubá (UNIFEI)',
-  'Universidade Federal de Juiz de Fora (UFJF)',
-  'Universidade Federal de Lavras (UFLA)',
-  'Universidade Federal de Ouro Preto (UFOP)',
-  'Universidade Federal do Triângulo Mineiro (UFTM)',
-  'Universidade Federal de Uberlândia (UFU)',
-  'Universidade Federal dos Vales do Jequitinhonha e Mucuri (UFVJM)',
-  'Universidade Federal de Viçosa (UFV)',
-  'Universidade Federal Fluminense (UFF)',
+  'UnB - Universidade de Brasília',
+  'UFABC - Universidade Federal do ABC',
+  'UFBA - Universidade Federal da Bahia',
+  'UFC - Universidade Federal do Ceará',
+  'UFES - Universidade Federal do Espírito Santo',
+  'UFG - Universidade Federal de Goiás',
+  'UFMA - Universidade Federal do Maranhão',
+  'UFMG - Universidade Federal de Minas Gerais',
+  'UFMT - Universidade Federal do Mato Grosso',
+  'UFMS - Universidade Federal do Mato Grosso do Sul',
+  'UFPA - Universidade Federal do Pará',
+  'UFPB - Universidade Federal da Paraíba',
+  'UFPel - Universidade Federal de Pelotas',
+  'UFPE - Universidade Federal de Pernambuco',
+  'UFPI - Universidade Federal do Piauí',
+  'UFPR - Universidade Federal do Paraná',
+  'UFRJ - Universidade Federal do Rio de Janeiro',
+  'UFRN - Universidade Federal do Rio Grande do Norte',
+  'UFRGS - Universidade Federal do Rio Grande do Sul',
+  'UNIR - Universidade Federal de Rondônia',
+  'UFRR - Universidade Federal de Roraima',
+  'UFSC - Universidade Federal de Santa Catarina',
+  'UFSM - Universidade Federal de Santa Maria',
+  'UFSCar - Universidade Federal de São Carlos',
+  'UNIFESP - Universidade Federal de São Paulo',
+  'UFS - Universidade Federal de Sergipe',
+  'UFT - Universidade Federal do Tocantins',
+  'UNILA - Universidade Federal da Integração Latino-Americana',
+  'UFFS - Universidade Federal da Fronteira Sul',
+  'UFRB - Universidade Federal do Recôncavo da Bahia',
+  'UFRRJ - Universidade Federal Rural do Rio de Janeiro',
+  'UFRPE - Universidade Federal Rural de Pernambuco',
+  'UFRA - Universidade Federal Rural da Amazônia',
+  'UFAM - Universidade Federal do Amazonas',
+  'UFAC - Universidade Federal do Acre',
+  'UFAL - Universidade Federal de Alagoas',
+  'UNIFAP - Universidade Federal do Amapá',
+  'UNIFEI - Universidade Federal de Itajubá',
+  'UFJF - Universidade Federal de Juiz de Fora',
+  'UFLA - Universidade Federal de Lavras',
+  'UFOP - Universidade Federal de Ouro Preto',
+  'UFTM - Universidade Federal do Triângulo Mineiro',
+  'UFU - Universidade Federal de Uberlândia',
+  'UFVJM - Universidade Federal dos Vales do Jequitinhonha e Mucuri',
+  'UFV - Universidade Federal de Viçosa',
+  'UFF - Universidade Federal Fluminense',
   // Estaduais
-  'Universidade de São Paulo (USP)',
-  'Universidade Estadual de Campinas (UNICAMP)',
-  'Universidade Estadual Paulista (UNESP)',
-  'Universidade do Estado do Rio de Janeiro (UERJ)',
-  'Universidade Estadual do Norte Fluminense (UENF)',
-  'Universidade Estadual de Londrina (UEL)',
-  'Universidade Estadual de Maringá (UEM)',
-  'Universidade Estadual de Ponta Grossa (UEPG)',
-  'Universidade Estadual do Centro-Oeste (UNICENTRO)',
-  'Universidade do Estado da Bahia (UNEB)',
-  'Universidade Estadual de Feira de Santana (UEFS)',
-  'Universidade Estadual do Sudoeste da Bahia (UESB)',
-  'Universidade Estadual de Santa Cruz (UESC)',
-  'Universidade Estadual do Ceará (UECE)',
-  'Universidade Estadual Vale do Acaraú (UVA)',
-  'Universidade do Estado do Amazonas (UEA)',
-  'Universidade do Estado do Pará (UEPA)',
-  'Universidade Estadual de Mato Grosso do Sul (UEMS)',
-  'Universidade do Estado de Mato Grosso (UNEMAT)',
-  'Universidade Estadual do Rio Grande do Norte (UERN)',
-  'Universidade Estadual da Paraíba (UEPB)',
-  'Universidade de Pernambuco (UPE)',
-  'Universidade Estadual de Alagoas (UNEAL)',
-  'Universidade Estadual do Piauí (UESPI)',
-  'Universidade Estadual do Maranhão (UEMA)',
-  'Universidade do Estado de Minas Gerais (UEMG)',
-  'Universidade Estadual de Montes Claros (UNIMONTES)',
+  'USP - Universidade de São Paulo',
+  'UNICAMP - Universidade Estadual de Campinas',
+  'UNESP - Universidade Estadual Paulista',
+  'UERJ - Universidade do Estado do Rio de Janeiro',
+  'UENF - Universidade Estadual do Norte Fluminense',
+  'UEL - Universidade Estadual de Londrina',
+  'UEM - Universidade Estadual de Maringá',
+  'UEPG - Universidade Estadual de Ponta Grossa',
+  'UNICENTRO - Universidade Estadual do Centro-Oeste',
+  'UNEB - Universidade do Estado da Bahia',
+  'UEFS - Universidade Estadual de Feira de Santana',
+  'UESB - Universidade Estadual do Sudoeste da Bahia',
+  'UESC - Universidade Estadual de Santa Cruz',
+  'UECE - Universidade Estadual do Ceará',
+  'UVA-CE - Universidade Estadual Vale do Acaraú',
+  'UEA - Universidade do Estado do Amazonas',
+  'UEPA - Universidade do Estado do Pará',
+  'UEMS - Universidade Estadual de Mato Grosso do Sul',
+  'UNEMAT - Universidade do Estado de Mato Grosso',
+  'UERN - Universidade Estadual do Rio Grande do Norte',
+  'UEPB - Universidade Estadual da Paraíba',
+  'UPE - Universidade de Pernambuco',
+  'UNEAL - Universidade Estadual de Alagoas',
+  'UESPI - Universidade Estadual do Piauí',
+  'UEMA - Universidade Estadual do Maranhão',
+  'UEMG - Universidade do Estado de Minas Gerais',
+  'UNIMONTES - Universidade Estadual de Montes Claros',
   // Privadas e confessionais
-  'Pontifícia Universidade Católica de São Paulo (PUC-SP)',
-  'Pontifícia Universidade Católica do Rio de Janeiro (PUC-Rio)',
-  'Pontifícia Universidade Católica de Minas Gerais (PUC Minas)',
-  'Pontifícia Universidade Católica do Rio Grande do Sul (PUCRS)',
-  'Pontifícia Universidade Católica do Paraná (PUCPR)',
-  'Pontifícia Universidade Católica de Campinas (PUC-Campinas)',
-  'Pontifícia Universidade Católica de Goiás (PUC Goiás)',
-  'Universidade Presbiteriana Mackenzie',
-  'Fundação Getulio Vargas (FGV)',
-  'Insper – Instituto de Ensino e Pesquisa',
-  'FAAP – Fundação Armando Alvares Penteado',
-  'Universidade Anhembi Morumbi',
-  'Universidade Metodista de São Paulo (UMESP)',
-  'Universidade de São Francisco (USF)',
-  'Universidade Cruzeiro do Sul',
-  'Universidade Estácio de Sá (UNESA)',
-  'Universidade Veiga de Almeida (UVA)',
-  'Universidade Cândido Mendes (UCAM)',
-  'Centro Universitário FEI',
-  'Universidade São Judas Tadeu',
+  'PUC-SP - Pontifícia Universidade Católica de São Paulo',
+  'PUC-Rio - Pontifícia Universidade Católica do Rio de Janeiro',
+  'PUC Minas - Pontifícia Universidade Católica de Minas Gerais',
+  'PUCRS - Pontifícia Universidade Católica do Rio Grande do Sul',
+  'PUCPR - Pontifícia Universidade Católica do Paraná',
+  'PUC-Campinas - Pontifícia Universidade Católica de Campinas',
+  'PUC Goiás - Pontifícia Universidade Católica de Goiás',
+  'Mackenzie - Universidade Presbiteriana Mackenzie',
+  'FGV - Fundação Getulio Vargas',
+  'Insper - Instituto de Ensino e Pesquisa',
+  'FAAP - Fundação Armando Alvares Penteado',
+  'Anhembi Morumbi - Universidade Anhembi Morumbi',
+  'UMESP - Universidade Metodista de São Paulo',
+  'USF - Universidade de São Francisco',
+  'Cruzeiro do Sul - Universidade Cruzeiro do Sul',
+  'UNESA - Universidade Estácio de Sá',
+  'UVA-RJ - Universidade Veiga de Almeida',
+  'UCAM - Universidade Cândido Mendes',
+  'FEI - Centro Universitário FEI',
+  'USJT - Universidade São Judas Tadeu',
   // Institutos de pesquisa
-  'Fundação Oswaldo Cruz (FIOCRUZ)',
-  'Instituto Nacional de Pesquisas Espaciais (INPE)',
-  'Instituto Nacional de Pesquisas da Amazônia (INPA)',
-  'Empresa Brasileira de Pesquisa Agropecuária (EMBRAPA)',
-  'Instituto de Pesquisa Econômica Aplicada (IPEA)',
-  'Instituto Brasileiro de Geografia e Estatística (IBGE)',
-  'Museu Paraense Emílio Goeldi (MPEG)',
-  'Centro Brasileiro de Pesquisas Físicas (CBPF)',
-  'Instituto Nacional do Semiárido (INSA)',
-  'Outra',
+  'FIOCRUZ - Fundação Oswaldo Cruz',
+  'INPE - Instituto Nacional de Pesquisas Espaciais',
+  'INPA - Instituto Nacional de Pesquisas da Amazônia',
+  'EMBRAPA - Empresa Brasileira de Pesquisa Agropecuária',
+  'IPEA - Instituto de Pesquisa Econômica Aplicada',
+  'IBGE - Instituto Brasileiro de Geografia e Estatística',
+  'MPEG - Museu Paraense Emílio Goeldi',
+  'CBPF - Centro Brasileiro de Pesquisas Físicas',
+  'INSA - Instituto Nacional do Semiárido',
 ]
 
 // ─── Reference format helpers ─────────────────────────────────────────────
@@ -722,24 +721,10 @@ function ArguicaoForm({
     initial ? { ...initial } : { ...EMPTY_ARGUICAO }
   )
   const [newMembro, setNewMembro] = useState('')
-  const [customInst, setCustomInst] = useState(
-    initial && !INSTITUICOES_BRASIL.includes(initial.instituicao) && initial.instituicao !== 'Outra'
-      ? initial.instituicao : ''
-  )
-  const [instSelect, setInstSelect] = useState(
-    initial
-      ? (INSTITUICOES_BRASIL.includes(initial.instituicao) ? initial.instituicao : 'Outra')
-      : ''
-  )
+  const [instValue, setInstValue] = useState(initial?.instituicao ?? '')
 
   const set = <K extends keyof typeof form>(k: K, v: typeof form[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }))
-
-  function handleInstChange(val: string) {
-    setInstSelect(val)
-    if (val !== 'Outra') set('instituicao', val)
-    else set('instituicao', customInst)
-  }
 
   function addMembro() {
     if (!newMembro.trim()) return
@@ -781,18 +766,18 @@ function ArguicaoForm({
         </div>
         <div>
           <Label className="text-xs">Instituição</Label>
-          <Select value={instSelect} onValueChange={handleInstChange}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-            <SelectContent className="max-h-60">
-              {INSTITUICOES_BRASIL.map((inst) => (
-                <SelectItem key={inst} value={inst}>{inst}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {instSelect === 'Outra' && (
-            <Input value={customInst} onChange={(e) => { setCustomInst(e.target.value); set('instituicao', e.target.value) }}
-              placeholder="Nome da instituição" className="mt-2" />
-          )}
+          <Input
+            list="instituicoes-list"
+            value={instValue}
+            onChange={(e) => { setInstValue(e.target.value); set('instituicao', e.target.value) }}
+            placeholder="Digite a sigla ou nome (ex: UFPA)"
+            className="mt-1"
+          />
+          <datalist id="instituicoes-list">
+            {INSTITUICOES_BRASIL.map((inst) => (
+              <option key={inst} value={inst} />
+            ))}
+          </datalist>
         </div>
         <div>
           <Label className="text-xs">Orientador(a)</Label>
