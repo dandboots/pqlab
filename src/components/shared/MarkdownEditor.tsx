@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useLayoutEffect, Fragment } from 'react'
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
@@ -517,179 +517,136 @@ function InlineMdToolbar({
 }
 
 // ─── InlineMarkdownField ─────────────────────────────────────────────────────
-// Bear / Ulysses-style seamless inline editor.
+// AST-based contenteditable editor — Bear / Ulysses / Lexical model.
 //
-// Architecture:
-//   ┌─ container (position: relative) ────────────────────────────────────────┐
-//   │  ┌─ overlay (position: absolute; inset:0; z-index:0) ─────────────────┐ │
-//   │  │  syntax-highlighted markdown, pointer-events:none                  │ │
-//   │  └────────────────────────────────────────────────────────────────────┘ │
-//   │  ┌─ textarea (position: relative; z-index:1) ─────────────────────────┐ │
-//   │  │  transparent text (color:transparent) + visible caret              │ │
-//   │  │  determines container height via scrollHeight auto-resize          │ │
-//   │  └────────────────────────────────────────────────────────────────────┘ │
-//   └─────────────────────────────────────────────────────────────────────────┘
+// Pipeline per keystroke:
+//   onBeforeInput → preventDefault → applyChange(model) → setDoc → React render
+//   → useLayoutEffect → restoreSelection(savedOffset)
 //
-// — The textarea is ALWAYS in the DOM (no mode switching, no DOM swapping).
-// — The browser places the cursor naturally at the exact click position.
-// — Zero layout shift: the textarea is always the layout element.
-// — The overlay renders syntax-highlighted markdown through the transparent textarea.
+// The DOM is a projection of the model, never the source of truth.
+// Cursor is preserved via text-offset ↔ DOM-position mapping.
+//
+// INVARIANT: editorRef.current.textContent === docRef.current (always)
 
-// Split regex for inline patterns — bold before italic so ** wins over *
-const INLINE_SPLIT_RE = /(\*\*[^*\n]+?\*\*|~~[^~\n]+?~~|\*[^*\n]+?\*|`[^`\n]+?`|\[\[[^\]\n]+?\]\]|\[[^\]\n]+?\]\([^)\n]+?\)|\bpp?\.\s*\d+(?:\s*[-–]\s*\d+)?\b|\(\d+\))/g
+// ─── Selection utilities ──────────────────────────────────────────────────────
 
-function syntaxSpan(part: string, key: number | string): React.ReactNode {
-  // **bold**
-  if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-    const inner = part.slice(2, -2)
-    return (
-      <span key={key}>
-        <span className="text-gray-300">**</span>
-        <span className="font-semibold">{inner}</span>
-        <span className="text-gray-300">**</span>
-      </span>
-    )
-  }
-  // ~~strikethrough~~
-  if (part.startsWith('~~') && part.endsWith('~~') && part.length > 4) {
-    const inner = part.slice(2, -2)
-    return (
-      <span key={key}>
-        <span className="text-gray-300">~~</span>
-        <span className="line-through text-gray-400">{inner}</span>
-        <span className="text-gray-300">~~</span>
-      </span>
-    )
-  }
-  // *italic* (not bold — starts with single *)
-  if (part.startsWith('*') && !part.startsWith('**') && part.endsWith('*') && part.length > 2) {
-    const inner = part.slice(1, -1)
-    return (
-      <span key={key}>
-        <span className="text-gray-300">*</span>
-        <span className="italic">{inner}</span>
-        <span className="text-gray-300">*</span>
-      </span>
-    )
-  }
-  // `code`
-  if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
-    return (
-      <span key={key} className="rounded bg-gray-100 px-0.5 font-mono text-xs text-gray-700">
-        {part}
-      </span>
-    )
-  }
-  // [[wiki link]]
-  if (part.startsWith('[[') && part.endsWith(']]')) {
-    const title = part.slice(2, -2)
-    return (
-      <span key={key} className="inline-flex items-center gap-0.5 rounded border border-orange-200 bg-orange-50 px-1 text-xs font-medium text-orange-700">
-        <span className="text-orange-400">#</span>{title}
-      </span>
-    )
-  }
-  // [text](url)
-  if (part.startsWith('[') && part.includes('](')) {
-    return <span key={key} className="text-blue-600 underline">{part}</span>
-  }
-  // Page ref: p. 90, pp. 90-92
-  PAGE_PILL_RE.lastIndex = 0
-  if (PAGE_PILL_RE.test(part)) {
-    return (
-      <span key={key} className="inline-flex items-center rounded border border-teal-200 bg-teal-50 px-1.5 font-mono text-xs text-teal-700 whitespace-nowrap">
-        {part}
-      </span>
-    )
-  }
-  // Topic number: (1) (2) …
-  if (/^\(\d+\)$/.test(part)) {
-    return (
-      <span key={key} className="inline-flex h-[1.3em] w-[1.3em] items-center justify-center rounded-full border border-gray-300 bg-gray-100 text-xs font-semibold text-gray-700">
-        {part.slice(1, -1)}
-      </span>
-    )
-  }
-  return part
+/** Save cursor/selection as linear text offsets (DOM-independent). */
+function getSelectionOffsets(el: Element): { start: number; end: number } | null {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return null
+  const range = sel.getRangeAt(0)
+  if (!el.contains(range.startContainer)) return null
+  const preStart = document.createRange()
+  preStart.selectNodeContents(el)
+  preStart.setEnd(range.startContainer, range.startOffset)
+  const preEnd = document.createRange()
+  preEnd.selectNodeContents(el)
+  preEnd.setEnd(range.endContainer, range.endOffset)
+  return { start: preStart.toString().length, end: preEnd.toString().length }
 }
 
-function syntaxLine(line: string, lineKey: number): React.ReactNode {
-  // Horizontal rule: ---, ***, ___
-  if (/^[-*_]{3,}$/.test(line.trim()) && line.trim().length >= 3) {
-    return <span key={lineKey} className="text-gray-300">{line}</span>
+/** Walk text nodes to find the DOM node+offset for a given character index. */
+function findDOMPos(el: Element, target: number): { node: Node; offset: number } {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  let acc = 0
+  let n: Node | null
+  while ((n = walker.nextNode()) !== null) {
+    const len = (n as Text).length
+    if (acc + len >= target) return { node: n, offset: target - acc }
+    acc += len
   }
-  // Heading: # / ## / ###  (same font-size, different weight — preserves cursor alignment)
-  const hMatch = line.match(/^(#{1,3}) (.+)$/)
-  if (hMatch) {
-    const level = hMatch[1].length
-    const wt = level === 1 ? 'font-bold' : level === 2 ? 'font-semibold' : 'font-medium'
-    const parts = hMatch[2].split(INLINE_SPLIT_RE).filter(Boolean)
-    return (
-      <span key={lineKey} className={cn(wt, 'text-gray-900')}>
-        <span className="font-normal text-gray-300">{hMatch[1]} </span>
-        {parts.map((p, i) => syntaxSpan(p, `${lineKey}-${i}`))}
-      </span>
-    )
-  }
-  // Blockquote: > text
-  if (line.startsWith('> ')) {
-    const inner = line.slice(2)
-    const parts = inner.split(INLINE_SPLIT_RE).filter(Boolean)
-    return (
-      <span key={lineKey} className="italic text-gray-500">
-        <span className="not-italic text-gray-300">{'> '}</span>
-        {parts.map((p, i) => syntaxSpan(p, `${lineKey}-${i}`))}
-      </span>
-    )
-  }
-  // Bullet list: - item / * item
-  const bMatch = line.match(/^(\s*)([-*]) (.*)$/)
-  if (bMatch) {
-    const parts = bMatch[3].split(INLINE_SPLIT_RE).filter(Boolean)
-    return (
-      <span key={lineKey}>
-        {bMatch[1]}
-        <span className="text-gray-400">{bMatch[2]} </span>
-        {parts.map((p, i) => syntaxSpan(p, `${lineKey}-${i}`))}
-      </span>
-    )
-  }
-  // Numbered list: 1. item
-  const nMatch = line.match(/^(\d+)\. (.*)$/)
-  if (nMatch) {
-    const parts = nMatch[2].split(INLINE_SPLIT_RE).filter(Boolean)
-    return (
-      <span key={lineKey}>
-        <span className="text-gray-400">{nMatch[1]}. </span>
-        {parts.map((p, i) => syntaxSpan(p, `${lineKey}-${i}`))}
-      </span>
-    )
-  }
-  // Regular text
-  const parts = line.split(INLINE_SPLIT_RE).filter(Boolean)
-  return (
-    <span key={lineKey}>
-      {parts.length > 0
-        ? parts.map((p, i) => syntaxSpan(p, `${lineKey}-${i}`))
-        : '\u200B'  // zero-width space keeps empty lines at full line-height
+  return { node: el, offset: el.childNodes.length }
+}
+
+/** Restore a saved { start, end } selection inside el. */
+function restoreSelectionOffsets(el: Element, start: number, end: number) {
+  const sel = window.getSelection()
+  if (!sel) return
+  const s = findDOMPos(el, start)
+  const e = start === end ? s : findDOMPos(el, end)
+  const r = document.createRange()
+  r.setStart(s.node, s.offset)
+  r.setEnd(e.node, e.offset)
+  sel.removeAllRanges()
+  sel.addRange(r)
+}
+
+// ─── Tokenizer ────────────────────────────────────────────────────────────────
+// Produces a flat array of { text, cls } segments.
+// INVARIANT: segs.map(s => s.text).join('') === input text (always)
+
+interface Seg { text: string; cls: string }
+
+const INLINE_TOKEN_RE = /(\*\*[^*\n]+?\*\*|~~[^~\n]+?~~|\*[^*\n]+?\*|`[^`\n]+?`|\[\[[^\]\n]+?\]\]|\[[^\]\n]+?\]\([^)\n]+?\)|\bpp?\.\s*\d+(?:\s*[-–]\s*\d+)?\b|\(\d+\))/g
+
+function tokenInline(text: string, base: string): Seg[] {
+  const out: Seg[] = []
+  INLINE_TOKEN_RE.lastIndex = 0
+  let last = 0; let m: RegExpExecArray | null
+  while ((m = INLINE_TOKEN_RE.exec(text)) !== null) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index), cls: base })
+    const s = m[0]
+    if (s.startsWith('**') && s.length > 4) {
+      out.push({ text: '**', cls: 'text-gray-300' })
+      out.push({ text: s.slice(2, -2), cls: cn('font-semibold', base) })
+      out.push({ text: '**', cls: 'text-gray-300' })
+    } else if (s.startsWith('~~') && s.length > 4) {
+      out.push({ text: '~~', cls: 'text-gray-300' })
+      out.push({ text: s.slice(2, -2), cls: cn('line-through text-gray-400', base) })
+      out.push({ text: '~~', cls: 'text-gray-300' })
+    } else if (s.startsWith('*') && s.length > 2) {
+      out.push({ text: '*', cls: 'text-gray-300' })
+      out.push({ text: s.slice(1, -1), cls: cn('italic', base) })
+      out.push({ text: '*', cls: 'text-gray-300' })
+    } else if (s.startsWith('`') && s.length > 2) {
+      out.push({ text: s, cls: 'font-mono text-xs text-gray-700 bg-gray-100 rounded px-0.5' })
+    } else if (s.startsWith('[[')) {
+      out.push({ text: '[[', cls: 'text-orange-300' })
+      out.push({ text: s.slice(2, -2), cls: cn('text-orange-600 font-medium', base) })
+      out.push({ text: ']]', cls: 'text-orange-300' })
+    } else if (s.startsWith('[')) {
+      out.push({ text: s, cls: cn('text-blue-600 underline', base) })
+    } else {
+      PAGE_PILL_RE.lastIndex = 0
+      if (PAGE_PILL_RE.test(s)) {
+        out.push({ text: s, cls: 'text-teal-600 bg-teal-50 border border-teal-200 rounded px-0.5 font-mono text-xs' })
+      } else if (/^\(\d+\)$/.test(s)) {
+        out.push({ text: s, cls: 'text-gray-600 bg-gray-100 border border-gray-300 rounded-full text-xs font-semibold px-0.5' })
+      } else {
+        out.push({ text: s, cls: base })
       }
-    </span>
-  )
+    }
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push({ text: text.slice(last), cls: base })
+  return out
 }
 
-function syntaxHighlight(text: string): React.ReactNode {
-  if (!text) return null
+function tokenLine(line: string): Seg[] {
+  if (/^[-*_]{3,}$/.test(line.trim())) return [{ text: line, cls: 'text-gray-300' }]
+  const h = line.match(/^(#{1,3}) (.+)$/)
+  if (h) {
+    const wt = h[1].length === 1 ? 'font-bold' : h[1].length === 2 ? 'font-semibold' : 'font-medium'
+    return [{ text: h[1] + ' ', cls: 'text-gray-300 font-normal' }, ...tokenInline(h[2], cn(wt, 'text-gray-900'))]
+  }
+  if (line.startsWith('> ')) return [{ text: '> ', cls: 'text-gray-300' }, ...tokenInline(line.slice(2), 'italic text-gray-500')]
+  const b = line.match(/^(\s*)([-*]) (.*)$/)
+  if (b) return [...(b[1] ? [{ text: b[1], cls: '' }] : []), { text: b[2] + ' ', cls: 'text-gray-400' }, ...tokenInline(b[3], '')]
+  const n = line.match(/^(\d+)\. (.*)$/)
+  if (n) return [{ text: n[1] + '. ', cls: 'text-gray-400' }, ...tokenInline(n[2], '')]
+  return tokenInline(line, '')
+}
+
+/** Full markdown → Seg[]. Invariant: segs.map(s=>s.text).join('')===text */
+function tokenizeMD(text: string): Seg[] {
+  if (!text) return []
   const lines = text.split('\n')
-  return (
-    <>
-      {lines.map((line, i) => (
-        <Fragment key={i}>
-          {syntaxLine(line, i)}
-          {i < lines.length - 1 ? '\n' : null}
-        </Fragment>
-      ))}
-    </>
-  )
+  const out: Seg[] = []
+  lines.forEach((line, i) => {
+    out.push(...tokenLine(line))
+    if (i < lines.length - 1) out.push({ text: '\n', cls: '' })
+  })
+  return out
 }
 
 export interface InlineMarkdownFieldProps {
@@ -707,71 +664,150 @@ export function InlineMarkdownField({
   className,
   readOnly = false,
 }: InlineMarkdownFieldProps) {
-  const [isFocused, setIsFocused] = useState(false)
-  const [draft, setDraft] = useState(value)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // ── Model: text is the single source of truth ──────────────────────────────
+  const [doc, setDoc] = useState(value)
+  const docRef = useRef(value)          // always up-to-date, avoids stale closures
+  const editorRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const pendingSel = useRef<{ start: number; end: number } | null>(null)
+  const [focused, setFocused] = useState(false)
 
-  // Sync draft when value changes externally (not while user is typing)
+  // ── Sync when parent changes value externally ──────────────────────────────
   useEffect(() => {
-    if (!isFocused) setDraft(value)
-  }, [value, isFocused])
+    if (!focused && value !== docRef.current) {
+      docRef.current = value
+      setDoc(value)
+    }
+  }, [value, focused])
 
-  // Auto-resize: textarea grows to fit content — this drives container height
+  // ── After every React commit: restore pending cursor position ──────────────
+  // useLayoutEffect fires synchronously before browser paint — user never sees jump.
   useLayoutEffect(() => {
-    const ta = textareaRef.current
-    if (!ta) return
-    ta.style.height = 'auto'
-    ta.style.height = ta.scrollHeight + 'px'
-  }, [draft])
+    const sel = pendingSel.current
+    const el = editorRef.current
+    if (!sel || !el) return
+    pendingSel.current = null
+    restoreSelectionOffsets(el, sel.start, sel.end)
+  })
 
-  function handleBlur(e: React.FocusEvent<HTMLTextAreaElement>) {
-    // Don't save if focus moved to the toolbar (toolbar uses onMouseDown+preventDefault)
-    if (containerRef.current?.contains(e.relatedTarget as Node)) return
-    setIsFocused(false)
-    if (draft !== value) onChange(draft)
-  }
+  // ── Input pipeline: intercept → mutate model → restore selection ───────────
+  function applyEdit(inputType: string, data: string | null, dataTransfer: DataTransfer | null) {
+    const el = editorRef.current!
+    const saved = getSelectionOffsets(el)
+    if (!saved) return
+    const { start, end } = saved
+    const text = docRef.current
+    let newText = text
+    let cur = start
 
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const val = e.target.value
-    const pos = e.target.selectionStart
-    // Live arrow substitution: -> → →, <- → ←
-    if (pos >= 2) {
-      const tail = val.slice(pos - 2, pos)
-      let arrow: string | null = null
-      if (tail === '->') arrow = '→'
-      if (tail === '<-') arrow = '←'
-      if (arrow) {
-        const next = val.slice(0, pos - 2) + arrow + val.slice(pos)
-        setDraft(next)
-        requestAnimationFrame(() => textareaRef.current?.setSelectionRange(pos - 1, pos - 1))
-        return
+    switch (inputType) {
+      case 'insertText': {
+        const ch = data ?? ''
+        const tentative = text.slice(0, start) + ch + text.slice(end)
+        const pos = start + ch.length
+        const tail = tentative.slice(Math.max(0, pos - 2), pos)
+        if (tail === '->') { newText = tentative.slice(0, pos - 2) + '→' + tentative.slice(pos); cur = pos - 1 }
+        else if (tail === '<-') { newText = tentative.slice(0, pos - 2) + '←' + tentative.slice(pos); cur = pos - 1 }
+        else { newText = tentative; cur = pos }
+        break
       }
+      case 'insertLineBreak':
+      case 'insertParagraph':
+        newText = text.slice(0, start) + '\n' + text.slice(end); cur = start + 1
+        break
+      case 'deleteContentBackward':
+        if (start !== end) { newText = text.slice(0, start) + text.slice(end); cur = start }
+        else if (start > 0) {
+          const prev = text[start - 1]
+          if (prev === '→') { newText = text.slice(0, start - 1) + '->' + text.slice(start); cur = start + 1 }
+          else if (prev === '←') { newText = text.slice(0, start - 1) + '<-' + text.slice(start); cur = start + 1 }
+          else { newText = text.slice(0, start - 1) + text.slice(start); cur = start - 1 }
+        }
+        break
+      case 'deleteContentForward':
+        if (start !== end) { newText = text.slice(0, start) + text.slice(end); cur = start }
+        else if (start < text.length) { newText = text.slice(0, start) + text.slice(start + 1); cur = start }
+        break
+      case 'deleteWordBackward': {
+        const before = text.slice(0, start !== end ? start : start)
+        const m = before.match(/\S+\s*$/)
+        const del = start !== end ? 0 : (m ? m[0].length : 1)
+        newText = text.slice(0, start - del) + text.slice(start !== end ? end : start)
+        cur = start - del
+        break
+      }
+      case 'deleteWordForward': {
+        if (start !== end) { newText = text.slice(0, start) + text.slice(end); cur = start }
+        else { const m = text.slice(start).match(/^\s*\S+/); const d = m ? m[0].length : 1; newText = text.slice(0, start) + text.slice(start + d); cur = start }
+        break
+      }
+      case 'insertFromPaste': {
+        const pasted = dataTransfer?.getData('text/plain') ?? data ?? ''
+        newText = text.slice(0, start) + pasted + text.slice(end); cur = start + pasted.length
+        break
+      }
+      default: return  // unhandled — let browser deal with it (copy, undo, etc.)
     }
-    setDraft(val)
+
+    docRef.current = newText
+    pendingSel.current = { start: cur, end: cur }
+    setDoc(newText)
+    if (newText !== text) onChange(newText)
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key !== 'Backspace') return
-    const ta = textareaRef.current
-    if (!ta) return
-    const { selectionStart: pos, selectionEnd: end } = ta
-    if (pos !== end || pos === 0) return
-    const prev = draft[pos - 1]
-    if (prev === '→') {
-      e.preventDefault()
-      const next = draft.slice(0, pos - 1) + '->' + draft.slice(pos)
-      setDraft(next)
-      requestAnimationFrame(() => ta.setSelectionRange(pos + 1, pos + 1))
-    } else if (prev === '←') {
-      e.preventDefault()
-      const next = draft.slice(0, pos - 1) + '<-' + draft.slice(pos)
-      setDraft(next)
-      requestAnimationFrame(() => ta.setSelectionRange(pos + 1, pos + 1))
-    }
+  function handleBeforeInput(e: React.FormEvent<HTMLDivElement>) {
+    const ev = e.nativeEvent as InputEvent
+    e.preventDefault()
+    applyEdit(ev.inputType, ev.data, ev.dataTransfer)
   }
 
-  // ── Read-only: render pretty markdown, no textarea ───────────────────────────
+  // Fallback for browsers where paste doesn't fire onBeforeInput
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text/plain')
+    const el = editorRef.current!
+    const saved = getSelectionOffsets(el)
+    if (!saved) return
+    const { start, end } = saved
+    const newText = docRef.current.slice(0, start) + pasted + docRef.current.slice(end)
+    docRef.current = newText
+    pendingSel.current = { start: start + pasted.length, end: start + pasted.length }
+    setDoc(newText)
+    onChange(newText)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Escape') editorRef.current?.blur()
+  }
+
+  // ── Toolbar integration via mock adapter ───────────────────────────────────
+  // The existing InlineMdToolbar was built for <textarea>. We adapt it by
+  // providing a proxy object that maps textarea API → contenteditable API.
+  const toolbarAdapterRef = useRef<HTMLTextAreaElement | null>(null)
+  if (!toolbarAdapterRef.current) {
+    toolbarAdapterRef.current = {
+      get value() { return docRef.current },
+      get selectionStart() { return getSelectionOffsets(editorRef.current!)?.start ?? 0 },
+      get selectionEnd() { return getSelectionOffsets(editorRef.current!)?.end ?? 0 },
+      focus() { editorRef.current?.focus() },
+      setSelectionRange(s: number, e_: number) {
+        // Called in toolbar's setTimeout — DOM is already updated, restore directly
+        requestAnimationFrame(() => {
+          if (editorRef.current) restoreSelectionOffsets(editorRef.current, s, e_)
+        })
+      },
+    } as unknown as HTMLTextAreaElement
+  }
+  const toolbarRef = { current: toolbarAdapterRef.current } as React.RefObject<HTMLTextAreaElement | null>
+
+  function handleToolbarChange(newValue: string) {
+    docRef.current = newValue
+    setDoc(newValue)
+    onChange(newValue)
+    editorRef.current?.focus()
+  }
+
+  // ── Read-only: pretty rendered HTML ───────────────────────────────────────
   if (readOnly) {
     return (
       <div className={cn('min-h-[2rem]', className)}>
@@ -780,51 +816,54 @@ export function InlineMarkdownField({
     )
   }
 
-  // ── Editable: transparent textarea + syntax-highlight overlay ─────────────────
+  // ── Editable: contenteditable div with live syntax highlighting ────────────
+  // The div IS the editing surface — cursor lives inside the styled spans.
+  // The browser places the cursor naturally where the user clicks.
+  // React re-renders inject the styled segments; useLayoutEffect restores cursor.
+  const segs = tokenizeMD(doc)
+
   return (
     <div ref={containerRef} className={cn('relative text-sm leading-relaxed', className)}>
-      {/* Toolbar — floats above field when focused */}
-      {isFocused && (
+      {/* Floating toolbar */}
+      {focused && (
         <div className="absolute right-0 z-20" style={{ bottom: '100%', marginBottom: '4px' }}>
-          <InlineMdToolbar value={draft} onChange={setDraft} textareaRef={textareaRef} />
+          <InlineMdToolbar value={doc} onChange={handleToolbarChange} textareaRef={toolbarRef} />
         </div>
       )}
 
-      {/* Syntax-highlight overlay — sits BEHIND the textarea (z-index 0).
-          Visible through the textarea's transparent text. */}
-      <div
-        className="absolute inset-0 pointer-events-none select-none overflow-hidden pl-5 pr-2 py-0 text-gray-800 whitespace-pre-wrap break-words"
-        style={{ zIndex: 0 }}
-        aria-hidden
-      >
-        {draft.trim()
-          ? syntaxHighlight(draft)
-          : <span className="text-gray-400 italic">{placeholder}</span>
-        }
-      </div>
+      {/* Placeholder — outside contenteditable so it's never part of textContent */}
+      {!doc && (
+        <span className="absolute top-0 left-5 pointer-events-none select-none text-gray-400 italic" aria-hidden>
+          {placeholder}
+        </span>
+      )}
 
-      {/* Textarea — transparent text, visible caret, z-index 1.
-          Always present in layout flow — determines container height.
-          Browser places cursor at natural click position. */}
-      <textarea
-        ref={textareaRef}
-        value={draft}
-        onChange={handleChange}
+      {/* The editor itself */}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onBeforeInput={handleBeforeInput}
+        onPaste={handlePaste}
         onKeyDown={handleKeyDown}
-        onFocus={() => setIsFocused(true)}
-        onBlur={handleBlur}
-        rows={1}
-        placeholder=""
-        className="relative w-full resize-none bg-transparent border-0 outline-none ring-0 focus:ring-0 pl-5 pr-2 py-0 min-h-[2rem] overflow-hidden"
-        style={{
-          font: 'inherit',
-          lineHeight: 'inherit',
-          color: 'transparent',
-          caretColor: '#374151',
-          WebkitTextFillColor: 'transparent',
-          zIndex: 1,
+        onFocus={() => setFocused(true)}
+        onBlur={(e) => {
+          if (containerRef.current?.contains(e.relatedTarget as Node)) return
+          setFocused(false)
+          onChange(docRef.current)
         }}
-      />
+        className="outline-none pl-5 pr-2 py-0 min-h-[2rem] whitespace-pre-wrap break-words text-gray-800"
+        data-gramm="false"
+        data-gramm_editor="false"
+        data-enable-grammarly="false"
+        spellCheck={false}
+      >
+        {segs.map((seg, i) =>
+          seg.cls
+            ? <span key={i} className={seg.cls}>{seg.text}</span>
+            : seg.text
+        )}
+      </div>
     </div>
   )
 }
