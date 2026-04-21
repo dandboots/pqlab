@@ -801,60 +801,63 @@ export function InlineMarkdownField({
 
   // ── Input handlers ────────────────────────────────────────────────────────
   //
-  // Architecture: we intercept only destructive / structural edits (deletions,
-  // Enter, paste) via onBeforeInput + e.preventDefault(), where we have full
-  // control over the model mutation.
+  // All text mutations go through applyEdit() → setDoc() → React render →
+  // useLayoutEffect restores cursor.  We use onKeyDown as the single entry
+  // point because it fires reliably for every keystroke in every browser
+  // (unlike onBeforeInput / onInput on contenteditable in Chrome 130+).
   //
-  // Plain character insertion is intentionally LEFT to the browser.  Fighting
-  // the browser here (calling e.preventDefault() for insertText) breaks macOS
-  // dead-keys, system text-replacement, and some IME flows because in those
-  // cases ev.data is null, so our handler inserts nothing while the browser's
-  // insertion was already prevented.
+  // Dead-key / IME composition (ç, é, ã, …): the browser handles the
+  // intermediate state; onCompositionEnd fires when the final character is
+  // committed, at which point we read el.textContent and sync the model.
   //
-  // After the browser inserts, onInput fires; we read el.textContent as the new
-  // truth, run the arrow substitution check, save the cursor offset, and call
-  // setDoc so React re-renders the syntax-highlighted spans. useLayoutEffect
-  // then restores the cursor to the saved offset before the browser paints.
+  // Paste is intercepted by onPaste (which already worked correctly).
 
-  function handleBeforeInput(e: React.FormEvent<HTMLDivElement>) {
-    const ev = e.nativeEvent as InputEvent
-    // Let insertText (and composition variants) be handled natively;
-    // onInput will sync the model afterwards.
-    if (
-      ev.inputType === 'insertText' ||
-      ev.inputType === 'insertCompositionText' ||
-      ev.inputType === 'insertFromComposition' ||
-      ev.inputType === 'insertFromDrop'
-    ) return
-    e.preventDefault()
-    applyEdit(ev.inputType, ev.data, ev.dataTransfer)
-  }
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Escape') { editorRef.current?.blur(); return }
 
-  // Called AFTER the browser has already mutated el for insertText / composition.
-  function handleInput() {
-    const el = editorRef.current
-    if (!el) return
-    const rawText = el.textContent ?? ''
-    // Get cursor position from the browser-updated DOM (before React re-renders)
-    const saved = getSelectionOffsets(el)
-    const cur = saved?.start ?? rawText.length
+    // During IME / dead-key composition let the browser manage the state;
+    // onCompositionEnd will sync the model when composition finishes.
+    if (e.nativeEvent.isComposing) return
 
-    // Arrow substitution: check the two chars immediately before the cursor
-    const tail = rawText.slice(Math.max(0, cur - 2), cur)
-    let finalText = rawText
-    let finalCur = cur
-    if (tail === '->') {
-      finalText = rawText.slice(0, cur - 2) + '→' + rawText.slice(cur)
-      finalCur = cur - 1
-    } else if (tail === '<-') {
-      finalText = rawText.slice(0, cur - 2) + '←' + rawText.slice(cur)
-      finalCur = cur - 1
+    // ── Deletion ──────────────────────────────────────────────────────────
+    // Alt/Ctrl + Backspace → delete word (Alt on macOS, Ctrl on other OSes)
+    if (e.key === 'Backspace' && (e.altKey || e.ctrlKey)) {
+      e.preventDefault(); applyEdit('deleteWordBackward', null, null); return
+    }
+    if (e.key === 'Backspace') {
+      e.preventDefault(); applyEdit('deleteContentBackward', null, null); return
+    }
+    if (e.key === 'Delete') {
+      e.preventDefault(); applyEdit('deleteContentForward', null, null); return
     }
 
-    docRef.current = finalText
-    pendingSel.current = { start: finalCur, end: finalCur }
-    setDoc(finalText)
-    onChange(finalText)
+    // ── Structure ─────────────────────────────────────────────────────────
+    if (e.key === 'Enter') {
+      e.preventDefault(); applyEdit('insertParagraph', null, null); return
+    }
+
+    // ── Printable characters ──────────────────────────────────────────────
+    // e.key is the actual character (already incorporating Shift, AltGr /
+    // Option combos).  Exclude Ctrl/Meta so copy-paste shortcuts pass through.
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault(); applyEdit('insertText', e.key, null); return
+    }
+
+    // Everything else (arrows, Tab, F-keys, Ctrl+C/Z/A …) passes through.
+  }
+
+  // Dead-key / IME: browser committed the composed text to the DOM.
+  // Sync our model from el.textContent (the only reliable source here).
+  function handleCompositionEnd() {
+    const el = editorRef.current
+    if (!el) return
+    const newText = el.textContent ?? ''
+    const saved = getSelectionOffsets(el)
+    const cur = saved?.start ?? newText.length
+    docRef.current = newText
+    pendingSel.current = { start: cur, end: cur }
+    setDoc(newText)
+    onChange(newText)
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
@@ -869,10 +872,6 @@ export function InlineMarkdownField({
     pendingSel.current = { start: start + pasted.length, end: start + pasted.length }
     setDoc(newText)
     onChange(newText)
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'Escape') editorRef.current?.blur()
   }
 
   // ── Toolbar integration via mock adapter ───────────────────────────────────
@@ -938,10 +937,9 @@ export function InlineMarkdownField({
         ref={editorRef}
         contentEditable
         suppressContentEditableWarning
-        onBeforeInput={handleBeforeInput}
-        onInput={handleInput}
-        onPaste={handlePaste}
         onKeyDown={handleKeyDown}
+        onCompositionEnd={handleCompositionEnd}
+        onPaste={handlePaste}
         onFocus={() => setFocused(true)}
         onBlur={(e) => {
           if (containerRef.current?.contains(e.relatedTarget as Node)) return
