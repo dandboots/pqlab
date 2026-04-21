@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import {
-  Bold, Italic, Strikethrough, Link2, Image, Code, List, ListOrdered,
+  Bold, Italic, Strikethrough, Underline, Link2, Image, Code, List, ListOrdered,
   Heading1, Heading2, Heading3, Quote, Minus, Eye, Edit3, Hash,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -74,6 +74,13 @@ function prependLine(
   }, 0)
 }
 
+/** Returns a small colored-swatch icon component for highlight toolbar buttons. */
+function makeHlIcon(bgCls: string) {
+  return function HlSwatch({ className: _c }: { className?: string }) {
+    return <span className={`inline-block w-2.5 h-2.5 rounded-sm border border-black/15 ${bgCls}`} />
+  }
+}
+
 const toolbarActions: (ToolbarAction | 'sep')[] = [
   {
     icon: Bold,
@@ -90,6 +97,17 @@ const toolbarActions: (ToolbarAction | 'sep')[] = [
     title: 'Tachado',
     action: (ta, v, c) => wrapSelection(ta, v, c, '~~', '~~', 'texto'),
   },
+  {
+    icon: Underline,
+    title: 'Sublinhado',
+    action: (ta, v, c) => wrapSelection(ta, v, c, '__', '__', 'texto'),
+  },
+  'sep',
+  // Highlight colour swatches — yellow / green / blue / pink
+  { icon: makeHlIcon('bg-yellow-300'), title: 'Realce amarelo',  action: (ta, v, c) => wrapSelection(ta, v, c, '==', '==',  'texto') },
+  { icon: makeHlIcon('bg-green-300'),  title: 'Realce verde',    action: (ta, v, c) => wrapSelection(ta, v, c, '==', '==g', 'texto') },
+  { icon: makeHlIcon('bg-blue-300'),   title: 'Realce azul',     action: (ta, v, c) => wrapSelection(ta, v, c, '==', '==b', 'texto') },
+  { icon: makeHlIcon('bg-pink-300'),   title: 'Realce rosa',     action: (ta, v, c) => wrapSelection(ta, v, c, '==', '==p', 'texto') },
   'sep',
   {
     icon: Heading1,
@@ -371,8 +389,8 @@ const inlineHeadingComponents = {
 const PAGE_PILL_RE = /\bpp?\.\s*\d+(?:\s*[-–]\s*\d+)?\b/g
 // Matches: (1) (2) (14) etc.
 const NUM_PILL_RE = /\(\d+\)/g
-// Combined split regex
-const HIGHLIGHT_SPLIT_RE = /(\bpp?\.\s*\d+(?:\s*[-–]\s*\d+)?\b|\(\d+\))/g
+// Combined split regex — captures page refs, topic pills, highlights, and underlines
+const HIGHLIGHT_SPLIT_RE = /(\bpp?\.\s*\d+(?:\s*[-–]\s*\d+)?\b|\(\d+\)|==[^=\n]+?==[gbp]?|__[^_\n]+?__)/g
 
 function highlightInlineText(text: string): React.ReactNode {
   const parts = text.split(HIGHLIGHT_SPLIT_RE)
@@ -402,6 +420,17 @@ function highlightInlineText(text: string): React.ReactNode {
           {part.slice(1, -1)}
         </span>
       )
+    }
+    // Underline: __text__
+    if (part.startsWith('__') && part.endsWith('__') && part.length > 4) {
+      return <u key={i}>{part.slice(2, -2)}</u>
+    }
+    // Highlight: ==text== / ==text==g / ==text==b / ==text==p
+    const hlM = part.match(/^==([^=\n]+)==([gbp])?$/)
+    if (hlM) {
+      const col = hlM[2]
+      const bgCls = col === 'g' ? 'bg-green-200' : col === 'b' ? 'bg-blue-200' : col === 'p' ? 'bg-pink-200' : 'bg-yellow-200'
+      return <mark key={i} className={cn('rounded px-0.5 not-italic font-[inherit]', bgCls)}>{hlM[1]}</mark>
     }
     return part
   })
@@ -577,7 +606,7 @@ function restoreSelectionOffsets(el: Element, start: number, end: number) {
 
 interface Seg { text: string; cls: string }
 
-const INLINE_TOKEN_RE = /(\*\*[^*\n]+?\*\*|~~[^~\n]+?~~|\*[^*\n]+?\*|`[^`\n]+?`|\[\[[^\]\n]+?\]\]|\[[^\]\n]+?\]\([^)\n]+?\)|\bpp?\.\s*\d+(?:\s*[-–]\s*\d+)?\b|\(\d+\))/g
+const INLINE_TOKEN_RE = /(\*\*[^*\n]+?\*\*|~~[^~\n]+?~~|__[^_\n]+?__|==[^=\n]+?==[gbp]?|\*[^*\n]+?\*|`[^`\n]+?`|\[\[[^\]\n]+?\]\]|\[[^\]\n]+?\]\([^)\n]+?\)|\bpp?\.\s*\d+(?:\s*[-–]\s*\d+)?\b|\(\d+\))/g
 
 function tokenInline(text: string, base: string): Seg[] {
   const out: Seg[] = []
@@ -594,6 +623,21 @@ function tokenInline(text: string, base: string): Seg[] {
       out.push({ text: '~~', cls: 'text-gray-300' })
       out.push({ text: s.slice(2, -2), cls: cn('line-through text-gray-400', base) })
       out.push({ text: '~~', cls: 'text-gray-300' })
+    } else if (s.startsWith('__') && s.length > 4) {
+      out.push({ text: '__', cls: 'text-gray-300' })
+      out.push({ text: s.slice(2, -2), cls: cn('underline', base) })
+      out.push({ text: '__', cls: 'text-gray-300' })
+    } else if (s.startsWith('==')) {
+      const hlM = s.match(/^==([^=\n]+)==([gbp])?$/)
+      if (hlM) {
+        const col = hlM[2]
+        const bg = col === 'g' ? 'bg-green-200' : col === 'b' ? 'bg-blue-200' : col === 'p' ? 'bg-pink-200' : 'bg-yellow-200'
+        out.push({ text: '==', cls: 'text-gray-300' })
+        out.push({ text: hlM[1], cls: `rounded px-0.5 ${bg}` })
+        out.push({ text: '==' + (col ?? ''), cls: 'text-gray-300' })
+      } else {
+        out.push({ text: s, cls: base })
+      }
     } else if (s.startsWith('*') && s.length > 2) {
       out.push({ text: '*', cls: 'text-gray-300' })
       out.push({ text: s.slice(1, -1), cls: cn('italic', base) })

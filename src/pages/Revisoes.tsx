@@ -177,6 +177,15 @@ const TIPO_LABELS: Record<TipoBanca, string> = {
   'outro': 'Outro',
 }
 
+/** Reverse map: display label → TipoBanca key */
+const TIPO_FROM_LABEL: Record<string, TipoBanca> = {
+  'TCC': 'tcc',
+  'Mestrado Acadêmico': 'mestrado-academico',
+  'Mestrado Profissional': 'mestrado-profissional',
+  'Doutorado': 'doutorado',
+  'Outro': 'outro',
+}
+
 function formatABNTArguicao(a: Arguicao): string {
   const parts = a.autor.trim().split(' ')
   const last = parts.pop() ?? ''
@@ -722,9 +731,38 @@ function ArguicaoForm({
   )
   const [newMembro, setNewMembro] = useState('')
   const [instValue, setInstValue] = useState(initial?.instituicao ?? '')
+  const [tipoBancaInput, setTipoBancaInput] = useState(() => {
+    if (!initial) return TIPO_LABELS['mestrado-academico']
+    if (initial.tipoBanca === 'outro') return initial.tipoOutro ?? TIPO_LABELS['outro']
+    return TIPO_LABELS[initial.tipoBanca]
+  })
+  const [modalidadeInput, setModalidadeInput] = useState(() => {
+    if (!initial?.modalidade) return ''
+    return initial.modalidade === 'qualificacao' ? 'Qualificação' : 'Defesa'
+  })
 
   const set = <K extends keyof typeof form>(k: K, v: typeof form[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }))
+
+  function handleTipoBancaChange(label: string) {
+    setTipoBancaInput(label)
+    const key = TIPO_FROM_LABEL[label]
+    if (key) {
+      set('tipoBanca', key)
+      if (key !== 'outro') set('tipoOutro', undefined)
+    } else if (label.trim()) {
+      // Unknown value → treat as "outro" with free-form description
+      set('tipoBanca', 'outro')
+      set('tipoOutro', label)
+    }
+  }
+
+  function handleModalidadeChange(label: string) {
+    setModalidadeInput(label)
+    if (label === 'Qualificação') set('modalidade', 'qualificacao')
+    else if (label === 'Defesa') set('modalidade', 'defesa')
+    else if (!label.trim()) set('modalidade', undefined)
+  }
 
   function addMembro() {
     if (!newMembro.trim()) return
@@ -744,8 +782,6 @@ function ArguicaoForm({
       updated_at: now,
     })
   }
-
-  const showModalidade = form.tipoBanca === 'mestrado-academico' || form.tipoBanca === 'mestrado-profissional' || form.tipoBanca === 'doutorado'
 
   return (
     <div className="space-y-4 py-2">
@@ -786,33 +822,35 @@ function ArguicaoForm({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-xs">Tipo de banca</Label>
-            <Select value={form.tipoBanca} onValueChange={(v) => set('tipoBanca', v as TipoBanca)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tcc">TCC</SelectItem>
-                <SelectItem value="mestrado-academico">Mestrado Acadêmico</SelectItem>
-                <SelectItem value="mestrado-profissional">Mestrado Profissional</SelectItem>
-                <SelectItem value="doutorado">Doutorado</SelectItem>
-                <SelectItem value="outro">Outro</SelectItem>
-              </SelectContent>
-            </Select>
-            {form.tipoBanca === 'outro' && (
-              <Input value={form.tipoOutro ?? ''} onChange={(e) => set('tipoOutro', e.target.value)}
-                placeholder="Descreva o tipo" className="mt-2 text-xs" />
-            )}
+            <Input
+              list="tipo-banca-list"
+              value={tipoBancaInput}
+              onChange={(e) => handleTipoBancaChange(e.target.value)}
+              placeholder="Ex.: Mestrado Acadêmico"
+              className="mt-1"
+            />
+            <datalist id="tipo-banca-list">
+              <option value="TCC" />
+              <option value="Mestrado Acadêmico" />
+              <option value="Mestrado Profissional" />
+              <option value="Doutorado" />
+              <option value="Outro" />
+            </datalist>
           </div>
-          {showModalidade && (
-            <div>
-              <Label className="text-xs">Modalidade</Label>
-              <Select value={form.modalidade ?? ''} onValueChange={(v) => set('modalidade', v as ModalidadeBanca)}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="qualificacao">Qualificação</SelectItem>
-                  <SelectItem value="defesa">Defesa</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          <div>
+            <Label className="text-xs">Modalidade</Label>
+            <Input
+              list="modalidade-list"
+              value={modalidadeInput}
+              onChange={(e) => handleModalidadeChange(e.target.value)}
+              placeholder="Ex.: Defesa"
+              className="mt-1"
+            />
+            <datalist id="modalidade-list">
+              <option value="Qualificação" />
+              <option value="Defesa" />
+            </datalist>
+          </div>
         </div>
         <div>
           <Label className="text-xs">Demais membros da banca</Label>
@@ -1026,7 +1064,7 @@ function ArguicaoCard({
                       {editingLabelIdx === idx ? (
                         <input
                           autoFocus
-                          className="text-xs font-semibold flex-1 border border-teal-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-teal-400 uppercase tracking-wide text-teal-700"
+                          className="text-sm font-semibold flex-1 border border-teal-300 rounded px-2 py-0.5 outline-none focus:ring-1 focus:ring-teal-400 uppercase tracking-wide text-teal-700"
                           value={labelDraft}
                           onChange={(e) => setLabelDraft(e.target.value)}
                           onBlur={() => { updateSecao(idx, { label: labelDraft.trim() || secao.label }); setEditingLabelIdx(null) }}
@@ -1038,7 +1076,7 @@ function ArguicaoCard({
                       ) : (
                         <button
                           type="button"
-                          className="text-xs font-semibold text-teal-700 uppercase tracking-wide flex items-center gap-1 group hover:text-teal-800"
+                          className="text-sm font-semibold text-teal-700 uppercase tracking-wide flex items-center gap-1 group hover:text-teal-800"
                           onClick={() => { setLabelDraft(secao.label); setEditingLabelIdx(idx) }}
                           title="Clique para renomear"
                         >
@@ -1075,7 +1113,7 @@ function ArguicaoCard({
 
                 {/* Anotações de Outros Membros — fixed optional section */}
                 <div className="border-t pt-3">
-                  <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide mb-1.5">
+                  <p className="text-sm font-semibold text-teal-700 uppercase tracking-wide mb-1.5">
                     Anotações de Outros Membros da Banca <span className="font-normal text-gray-400 normal-case">(opcional)</span>
                   </p>
                   <InlineMarkdownField
@@ -1176,7 +1214,7 @@ function ParecerCard({
 
                 {/* Parecer — inline editable */}
                 <div>
-                  <p className="text-xs font-semibold text-cyan-700 uppercase tracking-wide mb-1.5">Parecer</p>
+                  <p className="text-sm font-semibold text-cyan-700 uppercase tracking-wide mb-1.5">Parecer</p>
                   <InlineMarkdownField
                     value={data.parecer}
                     onChange={(v) => updateContent({ ...data, parecer: v })}
