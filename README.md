@@ -242,82 +242,133 @@ Labels de seção maiores nas Arguições
 #### Correções
 
 Inserção de caracteres: substituição do onBeforeInput delegado pelo React (root container) por addEventListener('beforeinput', …) nativo direto no elemento — ev.preventDefault() confiável em React 19 e Chrome ≥ 147
+
 Dropdowns de Tipo de Banca e Modalidade exibindo apenas uma opção corrigidos (remoção de h-[var(--radix-select-trigger-height)] no viewport do Radix Select)
+
 Sugestões do autocomplete de Instituição não desaparecem mais após cada tecla (rastreamento de lastEmittedRef para distinguir updates do próprio componente de resets externos)
+
 Layout mobile dos cards de Arguição e Parecer: conteúdo ocupa a largura total, botões de ação ficam em linha própria abaixo
-v0.7β — 17–20 de abril de 2026
-Edição inline introduzida em Fichamentos e Revisões
-Novas funcionalidades
+
+### v0.7β — 17–20 de abril de 2026
+
+#### Edição inline introduzida em Fichamentos e Revisões
+
+#### Novas funcionalidades
 
 Edição inline de dois passos: clicar no texto revela campo de edição no mesmo lugar; clicar fora salva automaticamente após 1,5 s de inatividade
+
 Auto-save com indicador de status (● Não salvo → Salvando… → ✓ Salvo)
+
 Suporte a quebras de linha na renderização: \n simples vira <br>, \n\n vira parágrafo com espaçamento
+
 Barra de ferramentas flutuante posicionada acima do campo ativo
-Correções
+
+#### Correções
 
 Eliminado salto de layout ao ativar o modo de edição
+
 Fonte, tamanho e cursor herdados corretamente do contexto visual dos cards
+
 Overlay transparente de textarea sobre div sem deslocamento
+
 v0.65β — 5 de abril de 2026 · DOI 10.5281/zenodo.19434033
+
 Dark mode e melhorias no módulo Revisões
-Novas funcionalidades
+
+#### Novas funcionalidades
 
 Dark mode completo com alternância persistente via botão na sidebar
+
 Top bar mobile reposicionada sem sobreposição ao conteúdo
+
 Módulo Revisões: importação de arguições e pareceres existentes via arquivo YAML (drag-and-drop na lista)
+
 Módulo Revisões: ordenação da lista por data, título ou autor, com botão de direção crescente/decrescente
+
 Módulo Revisões: contador de palavras e caracteres no campo Parecer
-Correções
+
+#### Correções
 
 loadRevisoes passa a usar Promise.allSettled — falha em um arquivo individual não trava o carregamento da lista inteira
+
 Auto-retry em conflito de SHA no writeYaml; importações executadas em série para evitar race conditions
+
 Guard contra created_at indefinido em registros YAML malformados
+
 v0.5β — 29 de março de 2026 · DOI 10.5281/zenodo.19324964
+
 Favicon e seções dinâmicas na Arguição
-Novas funcionalidades
+
+#### Novas funcionalidades
 
 Favicon SVG com ícone GraduationCap — identidade visual do pqLAB
+
 Módulo Revisões — Arguição: seções de conteúdo dinâmicas; o usuário pode adicionar, renomear (clicando no lápis) e remover seções personalizadas além das padrão
-v0.4β — 29 de março de 2026 · DOI 10.5281/zenodo.19305324
-Novo módulo: Submissões
-Novas funcionalidades
+
+### v0.4β — 29 de março de 2026 · DOI 10.5281/zenodo.19305324
+
+#### Novo módulo: Submissões
+
+#### Novas funcionalidades
 
 Módulo Submissões: quadro Kanban para acompanhamento de artigos, capítulos e outros trabalhos submetidos a periódicos e coletâneas — migrado e adaptado do SucupiraLAB
+
 Cor sky (azul-céu) na sidebar para o módulo Submissões, diferenciando-o do módulo Planos (roxo)
-v0.3β — 28 de março de 2026 · DOI 10.5281/zenodo.19299289
-Novo módulo: Canvas no Listas
-Novas funcionalidades
+
+### v0.3β — 28 de março de 2026 · DOI 10.5281/zenodo.19299289
+
+#### Novo módulo: Canvas no Listas
+
+#### Novas funcionalidades
 
 Módulo Listas — modo Canvas: disposição livre em 2D com drag-and-drop, tags por card e persistência de posição
+
 Cards do Canvas com diálogo de edição, tags individuais, preview de descrição e suporte a wikilinks
-Correções
+
+#### Correções
 
 Exportações PDF das Revisões passam a renderizar Markdown formatado — negrito, itálico e referências de página em teal bold
-v0.2β — 26 de março de 2026 · DOI 10.5281/zenodo.19229101
-Novo módulo: Revisões
-Novas funcionalidades
+
+### v0.2β — 26 de março de 2026 · DOI 10.5281/zenodo.19229101
+
+#### Novo módulo: Revisões
+
+#### Novas funcionalidades
 
 Módulo Revisões: gerenciamento de arguições de banca (TCC, mestrado, doutorado) e pareceres ad hoc, com campos estruturados por seção, referência formatada ABNT/APA e exportação para PDF, DOCX e Markdown
+
 Pílulas inline de referência de página (p. X, pp. X–Y) nos campos das Revisões
+
 Busca por texto nas Revisões
+
 Módulo Planos: exportação PDF com QR codes, links clicáveis e reordenação das seções da capa
-Correções
+
+#### Correções
 
 Cabeçalho PDF e alinhamento do formulário nas Revisões
-v0.1β — 17 de março de 2026 · DOI 10.5281/zenodo.19058215
-Lançamento inicial
+
+### v0.1β — 17 de março de 2026 · DOI 10.5281/zenodo.19058215
+
+#### Lançamento inicial
+
 Primeira versão pública do pqLAB. Plataforma web estática (React 19 + Vite + Tailwind CSS) com armazenamento em repositório GitHub do próprio pesquisador via API (YAML/Markdown).
 
-Módulos
+#### Módulos
 
 Fichamentos: diário de campo e notas de leitura com campos estruturados e exportação
+
 Listas: listas e memorandos em modo kanban e modo canvas
+
 Planos: planos de trabalho e de disciplina em formato estruturado com exportação PDF
+
 Grafo: visualização automática das conexões entre registros via wikilinks [[título]]
-Infraestrutura
+
+#### Infraestrutura
 
 Backend-less: dados armazenados diretamente no repositório GitHub do usuário (sem servidor)
+
 Deploy estático via GitHub Actions → GitHub Pages com domínio personalizado (pqlab.ombudsmanviktor.me)
+
 Licença GPL-3.0
 
 ---
